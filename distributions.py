@@ -65,7 +65,7 @@ class CRP():
 			self.countvec[chosen_cid]=1
 		self.countvec[cur_cid]-=1
 		if self.countvec[cur_cid] <= 0:
-			del(self.countvec, cur_cid)
+			del self.countvec['cur_cid']
 		self.Z[indx] = chosen_cid
 		return chosen_cid
 

@@ -355,12 +355,15 @@ class Sampler():
 	
 			if DPMIXTURE:
 				ll, surfaces[i] = self.sample_CRP(surfaces[i], sample=False); new_ll+=ll
+				ll, surfaces[i] = self.sample_thetac_CRP(surfaces[i], sample=False); new_ll+=ll
+				ll, surfaces[i] = self.sample_C_CRP(surfaces[i],sample=False); new_ll += ll
 			else:
 				ll, surfaces[i] = self.sample_mixing(surfaces[i],sample=False);new_ll+=ll
 				ll, surfaces[i] = self.sample_Z(surfaces[i],sample=False);new_ll+=ll
 	
-			ll, surfaces[i] = self.sample_thetac(surfaces[i],sample=False);new_ll+=ll
-			ll, surfaces[i] = self.sample_C(surfaces[i],sample=False);new_ll+=ll
+				ll, surfaces[i] = self.sample_thetac(surfaces[i],sample=False);new_ll+=ll
+				ll, surfaces[i] = self.sample_C(surfaces[i],sample=False);new_ll+=ll
+				
 			# ll, nparams = self.sample_mu(nparams,sample=False); new_ll+=ll
 	
 			ll, surfaces[i] = self.sample_X(surfaces[i],sample=False); new_ll+=ll
