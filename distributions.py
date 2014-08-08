@@ -46,6 +46,11 @@ class CRP():
 		N = self.N; alpha = self.alpha
 		cur_cid = self.Z[indx]
 
+		print 'ZZ:',np.unique(self.Z)
+		print 'CV:',self.countvec.keys()
+		print self.countvec
+
+
 		countvec = self.countvec
 		countvec[cur_cid] -= 1
 		if countvec[cur_cid] <= 0:
@@ -72,6 +77,8 @@ class CRP():
 			countvec[chosen_cid]=1
 
 		self.Z[indx] = chosen_cid
+		print 'chosen:', chosen_cid
+		print '------'
 		return chosen_cid
 
 	def logpdf(self):

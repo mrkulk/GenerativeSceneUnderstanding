@@ -15,7 +15,7 @@ DPMIXTURE = True
 
 class Sampler():
 	def __init__(self):
-		self.alpha = 0.1 #CRP hyper
+		self.alpha = 0.4 #CRP hyper
 		self.gpyramid = False
 		self.gpr_layers = [4,8,10] #number of gpr layers
 		self.move_probabilities = [0.7,0.2,0.1] #update,birth,death
@@ -193,6 +193,7 @@ class Sampler():
 		else:
 			z_tmp = nparams['Z'].flatten()
 			crp = nparams['Z_CRPOBJ']
+			crp.Z = z_tmp
 
 		ll = crp.logpdf()
 
