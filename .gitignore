@@ -1,2 +1,3 @@
 *.pyc
+image_dump
 inference_store
