@@ -1,5 +1,5 @@
 import numpy as np
-import pdb,math
+import pdb,math,copy
 from scipy.special import gammaln
 from numpy import array, log, exp
 
@@ -45,11 +45,17 @@ class CRP():
 	def sample_pt(self,indx):
 		N = self.N; alpha = self.alpha
 		cur_cid = self.Z[indx]
-		allcids = self.countvec.keys()
+
+		countvec = self.countvec
+		countvec[cur_cid] -= 1
+		if countvec[cur_cid] <= 0:
+			del countvec[cur_cid]
+
+		allcids = countvec.keys()
 		ii=0
 		probabilities=list(np.zeros(len(allcids)+1))
 		for cid in allcids:
-			probabilities[ii]=self.countvec[cid]/(N-1.0+alpha)
+			probabilities[ii]=countvec[cid]/(N-1.0+alpha)
 			ii+=1
 		allcids.append(max(allcids)+1)
 		probabilities[-1]=alpha/(N-1.0+alpha)
@@ -58,14 +64,13 @@ class CRP():
 		indx = np.random.multinomial(1,probabilities)
 		indx = np.where(indx==1)[0][0]
 		chosen_cid = allcids[indx]
+
 		#remove and add in counvec dict
-		if self.countvec.has_key(chosen_cid):
-			self.countvec[chosen_cid]+=1
+		if countvec.has_key(chosen_cid):
+			countvec[chosen_cid]+=1
 		else:
-			self.countvec[chosen_cid]=1
-		self.countvec[cur_cid]-=1
-		if self.countvec[cur_cid] <= 0:
-			del self.countvec['cur_cid']
+			countvec[chosen_cid]=1
+
 		self.Z[indx] = chosen_cid
 		return chosen_cid
 

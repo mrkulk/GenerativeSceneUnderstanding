@@ -190,7 +190,9 @@ def display(surfaces, capture=False):
 		#glRotatef( -45, 0, 1, 0)
 		#glRotatef( np.random.uniform(0,360), 0,0,1)
 		for ii in surfaces.keys():
+			glPushMatrix()
 			surfaces[ii].render()
+			glPopMatrix()
 		glPopMatrix()
 		if capture:	
 			captured_image = captureImage()

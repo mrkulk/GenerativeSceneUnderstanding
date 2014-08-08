@@ -233,10 +233,10 @@ class Sampler():
 		#remove stale params
 		for cid in nparams['theta_c_crp'].keys():
 			if nparams['Z_CRPOBJ'].countvec.has_key(cid) == False:
-				del(nparams['theta_c_crp'], cid)
+				del nparams['theta_c_crp'][cid]
 
 		for cid in allcids:
-			if sample:
+			if sample or nparams['theta_c_crp'].has_key(cid) == False:
 				if nparams['theta_c_crp'].has_key(cid) == False:
 					nparams['theta_c_crp'][cid]=np.zeros(6)
 				nparams['theta_c_crp'][cid][0]=1;nparams['theta_c_crp'][cid][2]=1;nparams['theta_c_crp'][cid][4]=1;
