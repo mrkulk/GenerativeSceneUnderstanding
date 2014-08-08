@@ -29,7 +29,7 @@ GENERATE_DATA = False
 class BezierPatch():
 	def __init__(self):
 		# number of patches in x and y direction
-		self.nPts = 3
+		self.nPts = 10
 		self.K = 2
 		xMin, xMax, yMin, yMax = -0.5, 0.5, -0.5, 0.5
 		xStep = (xMax-xMin)/(self.nPts-1)
@@ -92,20 +92,20 @@ class BezierPatch():
 
 
 
-	def updateControlPoints(self,pts):
-		#self.controlPoints[:,:,2] = np.random.normal(0,1,(self.nPts,self.nPts))
-		# self.controlPoints[0:8,0:8,2]-=1
-		self.controlPoints = pts
+	# def updateControlPoints(self,pts):
+	# 	#self.controlPoints[:,:,2] = np.random.normal(0,1,(self.nPts,self.nPts))
+	# 	# self.controlPoints[0:8,0:8,2]-=1
+	# 	self.controlPoints = pts
 
-	def updateColors(self,colors):
-		self.colors = colors
+	# def updateColors(self,colors):
+	# 	self.colors = colors
 
 	def synthetic_render(self):
 		glEnable(GL_COLOR_MATERIAL)
 		glColor3f(0.7,0.2,0.1)
 		#glutSolidCube(1)
-		glutSolidCone(0.4,0.7,20,20)
-		# glutSolidSphere(0.4,20,20)
+		# glutSolidCone(0.4,0.7,20,20)
+		glutSolidSphere(0.4,20,20)
 
 	def render(self):
 		# plot all surface patches
@@ -120,7 +120,11 @@ class BezierPatch():
 		# self.patch = self.controlPoints[x:x+self.psize,y:y+self.psize,:]
 		self.patch_color[:,:,3]=1
 		# self.patch_color[:,:,0:3]=np.random.rand(self.nPts,self.nPts,3)#[0.5,0.1,0]
-		self.patch_color[:,:,0:3] = self.colors
+
+		#self.patch_color[:,:,0:3] = self.colors
+		self.patch_color[:,:,0:3] = self.params['C']
+
+		self.controlPoints = self.params['X']
 
 		glEnable(GL_COLOR_MATERIAL)
 		glEnable(GL_MAP2_VERTEX_3);
@@ -182,7 +186,7 @@ def display(surfaces, capture=False):
 		glTranslatef( 0, 0, -4 )
 		#glRotatef( -45, 0, 1, 0)
 		#glRotatef( np.random.uniform(0,360), 0,0,1)
-		for ii in range(len(surfaces)):
+		for ii in surfaces.keys():
 			surfaces[ii].render()
 		glPopMatrix()
 		if capture:	
@@ -227,6 +231,6 @@ def setup():
 if __name__ == "__main__":
 	setup()
 	surface = BezierPatch()
-	for ii in range(100):
+	for ii in range(10):
 		display(surface)
 

@@ -7,12 +7,14 @@ import skimage.color,scipy.misc
 from skimage import filter
 import matplotlib.pyplot as plt
 from PIL import Image
-
+import scipy.ndimage
 
 parallel = True
 
 class Sampler():
 	def __init__(self):
+		self.gpr_layers = [2,4,6,8] #number of gpr layers
+		self.move_probabilities = [0.7,0.2,0.1] #update,birth,death
 		self.surfaces = dict()
 		# self.surface = bsurface
 		# self.patch_dict = dict()
@@ -255,14 +257,18 @@ class Sampler():
 		return ll, surface
 
 
-	def logl_compute(self, oid, surface):
+	def logl_compute(self, oid, surface, mode='update'):
 		new_ll=0
-		if oid == None:
-			surfaces = copy.deepcopy(self.surfaces)
+		if mode == 'death' or mode == 'birth':
+			surfaces = surface
 		else:
-			surfaces = copy.deepcopy(self.surfaces)
-			surfaces[oid] = surface
-		for i in range(len(surfaces)):
+			if oid == None:
+				surfaces = copy.deepcopy(self.surfaces)
+			else:
+				surfaces = copy.deepcopy(self.surfaces)
+				surfaces[oid] = surface
+
+		for i in surfaces.keys():
 			ll, surfaces[i] = self.sample_mixing(surfaces[i],sample=False);new_ll+=ll
 			ll, surfaces[i] = self.sample_Z(surfaces[i],sample=False);new_ll+=ll
 	
@@ -286,16 +292,26 @@ class Sampler():
 			ll, surfaces[i] = self.sample_sz(surfaces[i],sample=False); new_ll+=ll
 
 			#pass params to renderer
-			surfaces[i].updateColors(surfaces[i].params['C'])
-			surfaces[i].updateControlPoints(surfaces[i].params['X'])
-
+			# surfaces[i].updateColors(surfaces[i].params['C'])
+			# surfaces[i].updateControlPoints(surfaces[i].params['X'])
+		 
 		#render all surfaces
 		rendering = bezier.display(surfaces, capture=True)/255.0
-	
+		
+		# for ii in range(0,len(self.gpr_layers)+1):
+		# 	if ii == 0:
+		# 		new_ll += np.sum(distributions.normal_logpdf(self.obs[:,:,i],rendering[:,:,i],0.05))
+
+		# 	self.obs[ii+1]=np.zeros(np.shape(self.obs[0]))
+		# 	sigma = self.gpr_layers[ii]
+		# 	self.obs[ii+1][:,:,0] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,0],sigma=10)
+		# 	self.obs[ii+1][:,:,1] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,1],sigma=10)
+		# 	self.obs[ii+1][:,:,2] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,2],sigma=10)
+		
 		for i in range(3):
-			#new_ll += np.sum(distributions.normal_logpdf(self.obs[:,:,i],rendering[:,:,i],self.pflip))
-			new_ll += np.sum(distributions.normal_logpdf(self.obs[:,:,i],rendering[:,:,i],0.05))
-			
+			# new_ll += np.sum(distributions.normal_logpdf(self.obs[:,:,i],rendering[:,:,i],self.pflip))
+			new_ll += np.sum(distributions.normal_logpdf(mu=self.obs[0][:,:,i],var=0.01,x=rendering[:,:,i]))
+
 		return new_ll, rendering
 
 
@@ -306,7 +322,6 @@ class Sampler():
 			return surface
 		if log(np.random.rand()) < new_ll - ll: #accepted
 			self.ll = new_ll
-			print 'accepted'
 			return nsurface
 		else:
 			self.ll = ll
@@ -360,7 +375,7 @@ class Sampler():
 
 	def propose_Z(self,oid, surface, xind, yind):
 		nsurface = copy.deepcopy(surface)
-		current_Zij_sample = np.where(np.random.multinomial(1,nsurface.params['mix'],1)==1)[1][0]
+		current_Zij_sample = np.where(np.random.multinomial(1,nsurface.params['mix'])==1)[0][0]
 		nsurface.params['Z'][xind,yind]=current_Zij_sample
 		new_ll,rendering = self.logl_compute(oid, nsurface)
 		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
@@ -414,7 +429,16 @@ class Sampler():
 		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
 
 	def set_observation(self,fname):
-		self.obs = scipy.misc.imread(fname)/255.0
+		obs = scipy.misc.imread(fname)/255.0
+		self.obs=dict()
+		self.obs[0]=obs
+		for ii in range(len(self.gpr_layers)):
+			self.obs[ii+1]=np.zeros(np.shape(self.obs[0]))
+			sigma = self.gpr_layers[ii]
+			self.obs[ii+1][:,:,0] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,0],sigma=10)
+			self.obs[ii+1][:,:,1] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,1],sigma=10)
+			self.obs[ii+1][:,:,2] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,2],sigma=10)
+		
 
 
 	def infer_transforms(self,ii,repeats):
@@ -426,6 +450,72 @@ class Sampler():
 			for j in range(3):
 				self.surfaces[ii] = self.propose_scale(ii,self.surfaces[ii],j)
 
+	def RJMCMC_UPDATE(self):
+		for ii in self.surfaces.keys():
+
+			self.infer_transforms(ii,repeats=1)
+
+			self.surfaces[ii] = self.propose_mixing(ii, self.surfaces[ii])
+
+			for repeat in range(self.surfaces[ii].nPts/2):
+				xind = np.random.randint(0,self.surfaces[ii].nPts)
+				yind = np.random.randint(0,self.surfaces[ii].nPts)				
+				self.surfaces[ii] = self.propose_Z(ii,self.surfaces[ii], xind, yind)
+
+			for repeat in range(2):
+				for k in range(self.surfaces[ii].K):
+					for dd in [1,3,5]:
+						self.surfaces[ii] = self.propose_thetac(ii,self.surfaces[ii],k=k,ii=dd)
+
+			self.infer_transforms(ii,repeats=1)
+
+			for repeat in range(self.surfaces[ii].nPts/2):
+				xind = np.random.randint(0,self.surfaces[ii].nPts)
+				yind = np.random.randint(0,self.surfaces[ii].nPts)					
+				# self.pflip = self.propose_pflip(self.pflip)
+				for channel in range(3):
+					self.surfaces[ii] = self.propose_C(ii,self.surfaces[ii],xind,yind,channel)
+
+			# for repeat in range(3):
+			# 	xind = np.random.randint(0,self.divisions)
+			# 	yind = np.random.randint(0,self.divisions)
+			# 	self.params = self.propose_mu(self.params,xind,yind)
+
+			for repeat in range(self.surfaces[ii].nPts/2):
+				xind = np.random.randint(0,self.surfaces[ii].nPts)
+				yind = np.random.randint(0,self.surfaces[ii].nPts)
+				self.surfaces[ii] = self.propose_X(ii,self.surfaces[ii],xind,yind)
+
+			self.infer_transforms(ii,repeats=1)
+			print 'pflip:', self.pflip
+
+	def RJMCMC_BIRTH(self):
+		
+		nsurfaces = copy.deepcopy(self.surfaces)
+		if len(nsurfaces) == 0:
+			max_oid = 0
+		else:
+			max_oid = max(nsurfaces.keys())+1
+		nsurfaces[max_oid] = bezier.BezierPatch()
+
+		_, nsurfaces[max_oid] = self.sample_prior_object(nsurfaces[max_oid]);
+		new_ll,rendering = self.logl_compute(max_oid, nsurfaces, 'birth');
+		new_ll += log(self.move_probabilities[2])-log(self.move_probabilities[1]) #p_death-p_birth:correction for dim change due to RJMCMC
+		self.surfaces=self.MCMC(self.ll, new_ll, self.surfaces, nsurfaces,rendering)
+		print 'birth attempt'
+
+	def RJMCMC_DEATH(self):
+		nsurfaces = copy.deepcopy(self.surfaces)
+		keys = nsurfaces.keys()
+		indx = np.random.randint(0,len(keys))
+		remove_oid = keys[indx]
+		del nsurfaces[remove_oid]
+
+		new_ll,rendering = self.logl_compute(oid=None, surface=nsurfaces, mode='death');
+
+		new_ll += log(self.move_probabilities[1])-log(self.move_probabilities[2]) #p_birth-p_death:correction for dim change due to RJMCMC
+		self.surfaces=self.MCMC(self.ll, new_ll, self.surfaces, nsurfaces,rendering)
+		print 'death attempt'
 
 	def infer(self,ITERS):
 		global parallel
@@ -433,49 +523,20 @@ class Sampler():
 
 		for itr in range(ITERS):
 			t1=time.time()
-			for ii in range(len(self.surfaces)):
 
-				self.infer_transforms(ii,repeats=1)
+			chosen = np.where(np.random.multinomial(1,self.move_probabilities)==1)[0][0]
+			if chosen == 0:#update
+				self.RJMCMC_UPDATE()
+			elif chosen == 1: #birth
+				self.RJMCMC_BIRTH()
+			elif chosen == 2:
+				self.RJMCMC_DEATH()
 
-				self.surfaces[ii] = self.propose_mixing(ii, self.surfaces[ii])
-
-				for repeat in range(self.surfaces[ii].nPts/2):
-					xind = np.random.randint(0,self.surfaces[ii].nPts)
-					yind = np.random.randint(0,self.surfaces[ii].nPts)				
-					self.surfaces[ii] = self.propose_Z(ii,self.surfaces[ii], xind, yind)
-
-				for repeat in range(2):
-					for k in range(self.surfaces[ii].K):
-						for dd in [1,3,5]:
-							self.surfaces[ii] = self.propose_thetac(ii,self.surfaces[ii],k=k,ii=dd)
-
-				self.infer_transforms(ii,repeats=1)
-
-				for repeat in range(self.surfaces[ii].nPts/2):
-					xind = np.random.randint(0,self.surfaces[ii].nPts)
-					yind = np.random.randint(0,self.surfaces[ii].nPts)					
-					self.pflip = self.propose_pflip(self.pflip)
-					for channel in range(3):
-						self.surfaces[ii] = self.propose_C(ii,self.surfaces[ii],xind,yind,channel)
-
-				# for repeat in range(3):
-				# 	xind = np.random.randint(0,self.divisions)
-				# 	yind = np.random.randint(0,self.divisions)
-				# 	self.params = self.propose_mu(self.params,xind,yind)
-
-				for repeat in range(self.surfaces[ii].nPts/2):
-					xind = np.random.randint(0,self.surfaces[ii].nPts)
-					yind = np.random.randint(0,self.surfaces[ii].nPts)
-					self.surfaces[ii] = self.propose_X(ii,self.surfaces[ii],xind,yind)
-
-				self.infer_transforms(ii,repeats=1)
-				
-				print 'LOGL:', self.ll, ' pflip:', self.pflip
-				if (itr%10) == 0:
-					print 'saving ...'
-					rendering = bezier.display(self.surfaces, capture=True)/255.0
-					scipy.misc.imsave('image_dump/'+str(itr)+'.png', rendering)
-					pickle.dump({'params':self.surfaces}, open('params.pkl','wb'))
+			if (itr%10) == 0:
+				print 'saving ...'
+				rendering = bezier.display(self.surfaces, capture=True)/255.0
+				scipy.misc.imsave('image_dump/'+str(itr)+'.png', rendering)
+				pickle.dump({'params':self.surfaces}, open('params.pkl','wb'))
 
 
 
