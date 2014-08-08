@@ -71,9 +71,12 @@ class BezierPatch():
 				'X_l':0,
 				'X_u':1,
 				'pflip':0.01,
+				'thetac_a': 0.2,
+				'thetac_b': 1.0,
 				#latents
 				'Z': np.zeros((self.nPts,self.nPts)),
 				'theta_c': np.zeros((self.K,3*2)),#rgb
+				'theta_c_crp': dict(),
 				'C':np.zeros((self.nPts,self.nPts,3)),
 				# 'mu_p': np.zeros((self.divisions,self.divisions)),
 				'X':np.zeros((self.nPts,self.nPts,3)),

@@ -7,13 +7,18 @@ from numpy import array, log, exp
 class CRP():
 
 	def __init__(self,N,alpha):
+		self.N=N
+		self.alpha = alpha
+
+	def sample_prior(self):
+		N = self.N; alpha = self.alpha
 		if N<=0:
 			return []
-	 	table_assignments = [1] # first customer sits at table 1
+		table_assignments = [1] # first customer sits at table 1
 
-	 	for i in range(1,N):
-	 		allcids = list(np.unique(table_assignments))
-	 		ii=0
+		for i in range(1,N):
+			allcids = list(np.unique(table_assignments))
+			ii=0
 			probabilities=list(np.zeros(len(allcids)+1))
 			for cid in allcids:
 				probabilities[ii]=len(np.where(table_assignments==cid)[0])/(N-1.0+alpha)
@@ -25,9 +30,52 @@ class CRP():
 			indx = np.random.multinomial(1,probabilities)
 			indx = np.where(indx==1)[0][0]
 			chosen_cid = allcids[indx]		
-	 		table_assignments.append(chosen_cid)
+			table_assignments.append(chosen_cid)
 
-	 	self.Z = table_assignments
+		self.Z = table_assignments
+		
+		self.uniques = np.unique(self.Z)
+		self.countvec = dict()
+		for i in range(len(self.uniques)):
+			cid = self.uniques[i]
+			self.countvec[cid]=len(np.where(self.Z == cid)[0])
+
+		return table_assignments
+
+	def sample_pt(self,indx):
+		N = self.N; alpha = self.alpha
+		cur_cid = self.Z[indx]
+		allcids = self.countvec.keys()
+		ii=0
+		probabilities=list(np.zeros(len(allcids)+1))
+		for cid in allcids:
+			probabilities[ii]=self.countvec[cid]/(N-1.0+alpha)
+			ii+=1
+		allcids.append(max(allcids)+1)
+		probabilities[-1]=alpha/(N-1.0+alpha)
+		probabilities = np.array(probabilities)
+		probabilities = probabilities / sum(probabilities)
+		indx = np.random.multinomial(1,probabilities)
+		indx = np.where(indx==1)[0][0]
+		chosen_cid = allcids[indx]
+		#remove and add in counvec dict
+		if self.countvec.has_key(chosen_cid):
+			self.countvec[chosen_cid]+=1
+		else:
+			self.countvec[chosen_cid]=1
+		self.countvec[cur_cid]-=1
+		if self.countvec[cur_cid] <= 0:
+			del(self.countvec, cur_cid)
+		self.Z[indx] = chosen_cid
+		return chosen_cid
+
+	def logpdf(self):
+		ll = 0
+		for i in self.countvec.keys():
+			ll += log_factorial(self.countvec[i])
+		ll = ll - log_factorial(len(self.Z)-1)
+		return ll
+
 
 def dirichlet_logpdf(a,x):
 		B = sum(gammaln(a)) - gammaln(sum(a))

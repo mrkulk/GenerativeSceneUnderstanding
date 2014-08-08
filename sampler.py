@@ -11,9 +11,13 @@ import scipy.ndimage
 
 parallel = True
 
+DPMIXTURE = True
+
 class Sampler():
 	def __init__(self):
-		self.gpr_layers = [2,4,6,8] #number of gpr layers
+		self.alpha = 0.1 #CRP hyper
+		self.gpyramid = False
+		self.gpr_layers = [4,8,10] #number of gpr layers
 		self.move_probabilities = [0.7,0.2,0.1] #update,birth,death
 		self.surfaces = dict()
 		# self.surface = bsurface
@@ -45,12 +49,16 @@ class Sampler():
 
 	def sample_prior_object(self,surface):
 		ret_ll = 0
-		ll, surface = self.sample_mixing(surface); ret_ll+=ll
-		ll, surface = self.sample_Z(surface); ret_ll+=ll
-		ll, surface = self.sample_thetac(surface); ret_ll+=ll
-		ll, surface = self.sample_C(surface); ret_ll+=ll
-		# ll,surface = self.sample_mu(surface)
-		# ret_ll+=ll
+		if DPMIXTURE:
+			ll, surface = self.sample_CRP(surface); ret_ll+=ll
+			ll, surface = self.sample_thetac_CRP(surface); ret_ll += ll
+			ll, surface = self.sample_C_CRP(surface); ret_ll += ll
+		else:
+			ll, surface = self.sample_mixing(surface); ret_ll+=ll
+			ll, surface = self.sample_Z(surface); ret_ll+=ll
+			ll, surface = self.sample_thetac(surface); ret_ll+=ll
+			ll, surface = self.sample_C(surface); ret_ll+=ll
+
 		ll, surface = self.sample_X(surface); ret_ll+=ll
 		
 		ll, surface = self.sample_tx(surface); ret_ll+=ll
@@ -174,17 +182,71 @@ class Sampler():
 
 		return ll, surface
 
+	def sample_CRP(self, surface, sample=True):
+		nparams = surface.params
+		if sample:
+			N = surface.nPts*surface.nPts
+			crp = distributions.CRP(N, self.alpha)
+			z_tmp = crp.sample_prior()
+			nparams['Z'] = np.reshape(z_tmp,(surface.nPts,surface.nPts))
+			nparams['Z_CRPOBJ'] = crp
+		else:
+			z_tmp = nparams['Z'].flatten()
+			crp = nparams['Z_CRPOBJ']
+
+		ll = crp.logpdf()
+
+		#MRF potentials
+		for ii in range(surface.nPts):
+			for jj in range(surface.nPts):
+				if jj > 0:	ll+=-nparams['lambda_c']*(nparams['Z'][jj,ii]-nparams['Z'][jj-1,ii])**2
+				if jj < surface.nPts-1:	ll+=-nparams['lambda_c']*(nparams['Z'][jj,ii]-nparams['Z'][jj+1,ii])**2
+				if ii > 0: ll+=-nparams['lambda_c']*(nparams['Z'][jj,ii]-nparams['Z'][jj,ii-1])**2
+				if ii < surface.nPts-1: ll+=-nparams['lambda_c']*(nparams['Z'][jj,ii]-nparams['Z'][jj,ii+1])**2
+
+				if ii > 0 and jj>0: ll+=-nparams['lambda_c']*(nparams['Z'][ii,jj]-nparams['Z'][ii-1,jj-1])**2
+				if ii < surface.nPts-1 and jj>0: ll+=-nparams['lambda_c']*(nparams['Z'][ii,jj]-nparams['Z'][ii+1,jj-1])**2
+				if ii < surface.nPts-1 and jj<surface.nPts-1: ll+=-nparams['lambda_c']*(nparams['Z'][ii,jj]-nparams['Z'][ii+1,jj+1])**2
+				if ii > 0 and jj<surface.nPts-1: ll+=-nparams['lambda_c']*(nparams['Z'][ii,jj]-nparams['Z'][ii-1,jj+1])**2
+		return ll, surface
+
+
 	def sample_thetac(self, surface, sample=True):
 		ll=0
+		a=surface.params['thetac_a']; b=surface.params['thetac_b']
 		nparams = surface.params
 		for k in range(surface.K):
 			if sample:
 				nparams['theta_c'][k,0]=1;nparams['theta_c'][k,2]=1;nparams['theta_c'][k,4]=1;
-				nparams['theta_c'][k,1]=np.random.uniform(0.2,1);nparams['theta_c'][k,3]=np.random.uniform(0.2,1);nparams['theta_c'][k,5]=np.random.uniform(0.2,1)		
-			ll+=distributions.uniform_logpdf(0.2,1,nparams['theta_c'][k,1])
-			ll+=distributions.uniform_logpdf(0.2,1,nparams['theta_c'][k,3])
-			ll+=distributions.uniform_logpdf(0.2,1,nparams['theta_c'][k,5])
+				nparams['theta_c'][k,1]=np.random.uniform(a,b);nparams['theta_c'][k,3]=np.random.uniform(a,b);nparams['theta_c'][k,5]=np.random.uniform(a,b)		
+			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c'][k,1])
+			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c'][k,3])
+			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c'][k,5])
 		return ll, surface
+
+	def sample_thetac_CRP(self, surface, sample=True):
+		ll = 0
+		a=surface.params['thetac_a']; b=surface.params['thetac_b']
+		nparams = surface.params
+		allcids = nparams['Z_CRPOBJ'].countvec.keys()
+
+		#remove stale params
+		for cid in nparams['theta_c_crp'].keys():
+			if nparams['Z_CRPOBJ'].countvec.has_key(cid) == False:
+				del(nparams['theta_c_crp'], cid)
+
+		for cid in allcids:
+			if sample:
+				if nparams['theta_c_crp'].has_key(cid) == False:
+					nparams['theta_c_crp'][cid]=np.zeros(6)
+				nparams['theta_c_crp'][cid][0]=1;nparams['theta_c_crp'][cid][2]=1;nparams['theta_c_crp'][cid][4]=1;
+				nparams['theta_c_crp'][cid][1]=np.random.uniform(a,b);nparams['theta_c_crp'][cid][3]=np.random.uniform(a,b);nparams['theta_c_crp'][cid][5]=np.random.uniform(a,b)		
+			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c_crp'][cid][1])
+			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c_crp'][cid][3])
+			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c_crp'][cid][5])
+
+		return ll, surface
+
 
 	# def sample_mu(self, nparams, sample=True):
 	# 	if sample:	nparams['mu_p'] = np.random.uniform(nparams['mu_l'],nparams['mu_u'],(self.divisions,self.divisions))
@@ -257,6 +319,27 @@ class Sampler():
 		return ll, surface
 
 
+	def sample_C_CRP(self, surface, sample=True):
+		nparams = surface.params
+		ll=0
+		for k in surface.params['Z_CRPOBJ'].countvec.keys():
+			indxs = np.where(nparams['Z']==k)
+			xindxs = indxs[0]; yindxs = indxs[1]
+			if sample:	nparams['C'][xindxs,yindxs,0]=np.random.beta(nparams['theta_c_crp'][k][0],nparams['theta_c_crp'][k][1],len(nparams['C'][xindxs,yindxs,0]))
+			ll += np.sum(scipy.stats.beta.logpdf(nparams['C'][xindxs,yindxs,0],nparams['theta_c_crp'][k][0],nparams['theta_c_crp'][k][1]))
+			# if np.isinf(ll):
+				# pdb.set_trace()
+			if sample:	nparams['C'][xindxs,yindxs,1]=np.random.beta(nparams['theta_c_crp'][k][2],nparams['theta_c_crp'][k][3],len(nparams['C'][xindxs,yindxs,0]))
+			ll += np.sum(scipy.stats.beta.logpdf(nparams['C'][xindxs,yindxs,1],nparams['theta_c_crp'][k][2],nparams['theta_c_crp'][k][3]))		
+			# if np.isinf(ll):
+				# pdb.set_trace()
+			if sample:	nparams['C'][xindxs,yindxs,2]=np.random.beta(nparams['theta_c_crp'][k][4],nparams['theta_c_crp'][k][5],len(nparams['C'][xindxs,yindxs,0]))
+			ll += np.sum(scipy.stats.beta.logpdf(nparams['C'][xindxs,yindxs,2],nparams['theta_c_crp'][k][4],nparams['theta_c_crp'][k][5]))
+			# if np.isinf(ll):
+				# pdb.set_trace()
+		return ll, surface
+
+
 	def logl_compute(self, oid, surface, mode='update'):
 		new_ll=0
 		if mode == 'death' or mode == 'birth':
@@ -269,8 +352,12 @@ class Sampler():
 				surfaces[oid] = surface
 
 		for i in surfaces.keys():
-			ll, surfaces[i] = self.sample_mixing(surfaces[i],sample=False);new_ll+=ll
-			ll, surfaces[i] = self.sample_Z(surfaces[i],sample=False);new_ll+=ll
+	
+			if DPMIXTURE:
+				ll, surfaces[i] = self.sample_CRP(surfaces[i], sample=False); new_ll+=ll
+			else:
+				ll, surfaces[i] = self.sample_mixing(surfaces[i],sample=False);new_ll+=ll
+				ll, surfaces[i] = self.sample_Z(surfaces[i],sample=False);new_ll+=ll
 	
 			ll, surfaces[i] = self.sample_thetac(surfaces[i],sample=False);new_ll+=ll
 			ll, surfaces[i] = self.sample_C(surfaces[i],sample=False);new_ll+=ll
@@ -298,19 +385,21 @@ class Sampler():
 		#render all surfaces
 		rendering = bezier.display(surfaces, capture=True)/255.0
 		
-		# for ii in range(0,len(self.gpr_layers)+1):
-		# 	if ii == 0:
-		# 		new_ll += np.sum(distributions.normal_logpdf(self.obs[:,:,i],rendering[:,:,i],0.05))
-
-		# 	self.obs[ii+1]=np.zeros(np.shape(self.obs[0]))
-		# 	sigma = self.gpr_layers[ii]
-		# 	self.obs[ii+1][:,:,0] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,0],sigma=10)
-		# 	self.obs[ii+1][:,:,1] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,1],sigma=10)
-		# 	self.obs[ii+1][:,:,2] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,2],sigma=10)
+		variance = 0.01
 		
-		for i in range(3):
-			# new_ll += np.sum(distributions.normal_logpdf(self.obs[:,:,i],rendering[:,:,i],self.pflip))
-			new_ll += np.sum(distributions.normal_logpdf(mu=self.obs[0][:,:,i],var=0.01,x=rendering[:,:,i]))
+		if self.gpyramid:
+			for ii in range(0,len(self.gpr_layers)+1):
+				if ii == 0:
+					for jj in range(3):
+						new_ll += np.sum(distributions.normal_logpdf(mu=self.obs[ii][:,:,jj],var=variance,x=rendering[:,:,jj]))
+				else:
+					sigma = self.gpr_layers[ii-1]
+					for jj in range(3):
+						ren_gpr = scipy.ndimage.gaussian_filter(rendering[:,:,i],sigma=sigma)
+						new_ll += np.sum(distributions.normal_logpdf(mu=self.obs[ii][:,:,jj],var=variance,x=ren_gpr))
+		else:
+			for i in range(3):
+				new_ll += np.sum(distributions.normal_logpdf(mu=self.obs[:,:,i],var=variance,x=rendering[:,:,i]))
 
 		return new_ll, rendering
 
@@ -380,9 +469,19 @@ class Sampler():
 		new_ll,rendering = self.logl_compute(oid, nsurface)
 		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
 
-	def propose_thetac(self, oid, surface, k, ii):
+	def propose_CRP(self,oid, surface, xind, yind):
 		nsurface = copy.deepcopy(surface)
-		nsurface.params['theta_c'][k,ii]=np.random.uniform(0.2,1)
+		height=np.shape(nsurface.params['Z'])[0]
+		width=np.shape(nsurface.params['Z'])[1]
+		current_Zij_sample = nsurface.params['Z_CRPOBJ'].sample_pt((xind*width)+yind)#unflatten
+		nsurface.params['Z'][xind,yind]=current_Zij_sample
+		new_ll,rendering = self.logl_compute(oid, nsurface)
+		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
+
+	def propose_thetac(self, oid, surface, k, ii):
+		a=surface.params['thetac_a']; b=surface.params['thetac_b']
+		nsurface = copy.deepcopy(surface)
+		nsurface.params['theta_c'][k,ii]=np.random.uniform(a,b)
 		new_ll,rendering = self.logl_compute(oid, nsurface)
 		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
 		# for k in range(surface.K):
@@ -391,6 +490,13 @@ class Sampler():
 		# 		for ii in [1,3,5]:
 		# 			nparams['theta_c'][k,ii] = np.random.uniform(0.2,1)
 		# 		new_ll, nparams = self.logl_compute(nparams)
+
+	def propose_thetac_crp(self, oid, surface, k, ii):
+		a=surface.params['thetac_a']; b=surface.params['thetac_b']
+		nsurface = copy.deepcopy(surface)
+		nsurface.params['theta_c_crp'][k][ii] = np.random.uniform(a,b)
+		new_ll,rendering = self.logl_compute(oid, nsurface)
+		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
 
 
 	def propose_C(self,oid, surface,xind,yind,channel):
@@ -408,6 +514,23 @@ class Sampler():
 		nsurface.params['C'][xind,yind,channel]=np.random.beta(a,b)
 		new_ll,rendering = self.logl_compute(oid, nsurface)
 		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
+
+	def propose_C_CRP(self,oid, surface,xind,yind,channel):
+		nsurface = copy.deepcopy(surface)
+		cid = nsurface.params['Z'][xind,yind]
+		if channel == 0:
+			a = nsurface.params['theta_c_crp'][cid][0]
+			b = nsurface.params['theta_c_crp'][cid][1]
+		elif channel == 1:
+			a = nsurface.params['theta_c_crp'][cid][2]
+			b = nsurface.params['theta_c_crp'][cid][3]
+		else:
+			a = nsurface.params['theta_c_crp'][cid][4]
+			b = nsurface.params['theta_c_crp'][cid][5]
+		nsurface.params['C'][xind,yind,channel]=np.random.beta(a,b)
+		new_ll,rendering = self.logl_compute(oid, nsurface)
+		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
+
 
 	# def propose_mu(self,params,xind,yind):
 	# 	nparams = copy.deepcopy(params)
@@ -430,15 +553,17 @@ class Sampler():
 
 	def set_observation(self,fname):
 		obs = scipy.misc.imread(fname)/255.0
-		self.obs=dict()
-		self.obs[0]=obs
-		for ii in range(len(self.gpr_layers)):
-			self.obs[ii+1]=np.zeros(np.shape(self.obs[0]))
-			sigma = self.gpr_layers[ii]
-			self.obs[ii+1][:,:,0] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,0],sigma=10)
-			self.obs[ii+1][:,:,1] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,1],sigma=10)
-			self.obs[ii+1][:,:,2] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,2],sigma=10)
-		
+		if self.gpyramid:
+			self.obs=dict()
+			self.obs[0]=obs
+			for ii in range(len(self.gpr_layers)):
+				self.obs[ii+1]=np.zeros(np.shape(self.obs[0]))
+				sigma = self.gpr_layers[ii]
+				self.obs[ii+1][:,:,0] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,0],sigma=sigma)
+				self.obs[ii+1][:,:,1] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,1],sigma=sigma)
+				self.obs[ii+1][:,:,2] = scipy.ndimage.gaussian_filter(self.obs[0][:,:,2],sigma=sigma)
+		else:
+			self.obs = obs			
 
 
 	def infer_transforms(self,ii,repeats):
@@ -455,26 +580,46 @@ class Sampler():
 
 			self.infer_transforms(ii,repeats=1)
 
-			self.surfaces[ii] = self.propose_mixing(ii, self.surfaces[ii])
+			if DPMIXTURE:
+				for repeat in range(self.surfaces[ii].nPts/2):
+					xind = np.random.randint(0,self.surfaces[ii].nPts)
+					yind = np.random.randint(0,self.surfaces[ii].nPts)				
+					self.surfaces[ii] = self.propose_CRP(ii,self.surfaces[ii], xind, yind)
 
-			for repeat in range(self.surfaces[ii].nPts/2):
-				xind = np.random.randint(0,self.surfaces[ii].nPts)
-				yind = np.random.randint(0,self.surfaces[ii].nPts)				
-				self.surfaces[ii] = self.propose_Z(ii,self.surfaces[ii], xind, yind)
+				for repeat in range(2):
+					for k in self.surfaces[ii].params['Z_CRPOBJ'].countvec.keys():
+						for dd in [1,3,5]:
+							self.surfaces[ii] = self.propose_thetac_crp(ii,self.surfaces[ii],k=k,ii=dd)
 
-			for repeat in range(2):
-				for k in range(self.surfaces[ii].K):
-					for dd in [1,3,5]:
-						self.surfaces[ii] = self.propose_thetac(ii,self.surfaces[ii],k=k,ii=dd)
+				self.infer_transforms(ii,repeats=1)
 
-			self.infer_transforms(ii,repeats=1)
+				for repeat in range(self.surfaces[ii].nPts/2):
+					xind = np.random.randint(0,self.surfaces[ii].nPts)
+					yind = np.random.randint(0,self.surfaces[ii].nPts)					
+					# self.pflip = self.propose_pflip(self.pflip)
+					for channel in range(3):
+						self.surfaces[ii] = self.propose_C_CRP(ii,self.surfaces[ii],xind,yind,channel)
+			else:
+				######################## GMM ##############################
+				self.surfaces[ii] = self.propose_mixing(ii, self.surfaces[ii])
+				for repeat in range(self.surfaces[ii].nPts/2):
+					xind = np.random.randint(0,self.surfaces[ii].nPts)
+					yind = np.random.randint(0,self.surfaces[ii].nPts)				
+					self.surfaces[ii] = self.propose_Z(ii,self.surfaces[ii], xind, yind)
 
-			for repeat in range(self.surfaces[ii].nPts/2):
-				xind = np.random.randint(0,self.surfaces[ii].nPts)
-				yind = np.random.randint(0,self.surfaces[ii].nPts)					
-				# self.pflip = self.propose_pflip(self.pflip)
-				for channel in range(3):
-					self.surfaces[ii] = self.propose_C(ii,self.surfaces[ii],xind,yind,channel)
+				for repeat in range(2):
+					for k in range(self.surfaces[ii].K):
+						for dd in [1,3,5]:
+							self.surfaces[ii] = self.propose_thetac(ii,self.surfaces[ii],k=k,ii=dd)
+
+				self.infer_transforms(ii,repeats=1)
+
+				for repeat in range(self.surfaces[ii].nPts/2):
+					xind = np.random.randint(0,self.surfaces[ii].nPts)
+					yind = np.random.randint(0,self.surfaces[ii].nPts)					
+					# self.pflip = self.propose_pflip(self.pflip)
+					for channel in range(3):
+						self.surfaces[ii] = self.propose_C(ii,self.surfaces[ii],xind,yind,channel)
 
 			# for repeat in range(3):
 			# 	xind = np.random.randint(0,self.divisions)
@@ -487,7 +632,10 @@ class Sampler():
 				self.surfaces[ii] = self.propose_X(ii,self.surfaces[ii],xind,yind)
 
 			self.infer_transforms(ii,repeats=1)
-			print 'pflip:', self.pflip
+			
+			if DPMIXTURE:
+				print 'CRP-K(OBJ[',ii,'] => ', len(self.surfaces[ii].params['Z_CRPOBJ'].countvec)
+		print
 
 	def RJMCMC_BIRTH(self):
 		
@@ -543,7 +691,7 @@ class Sampler():
 if __name__ == "__main__":
 	bezier.setup()
 	S = Sampler()
-	S.set_observation("obs_cone.png")
+	S.set_observation("obs_sphere.png")
 	S.infer(10000)
 
 
