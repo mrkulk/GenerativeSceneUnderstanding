@@ -34,7 +34,7 @@ class BezierPatch():
 		xMin, xMax, yMin, yMax = -0.5, 0.5, -0.5, 0.5
 		xStep = (xMax-xMin)/(self.nPts-1)
 		yStep = (yMax-yMin)/(self.nPts-1)
-		self.divisionsGL = 10
+		self.divisionsGL = 50
 
 		# initialise a list representing a regular 2D grid of control points.
 		# self.controlPoints = [ \
@@ -71,8 +71,8 @@ class BezierPatch():
 				'X_l':0,
 				'X_u':1,
 				'pflip':0.01,
-				'thetac_a': 0.2,
-				'thetac_b': 1.0,
+				'thetac_a': 1,#0.1,
+				'thetac_b': 1,#0.9,
 				#latents
 				'Z': np.zeros((self.nPts,self.nPts)),
 				'theta_c': np.zeros((self.K,3*2)),#rgb

@@ -219,10 +219,16 @@ class Sampler():
 		for k in range(surface.K):
 			if sample:
 				nparams['theta_c'][k,0]=1;nparams['theta_c'][k,2]=1;nparams['theta_c'][k,4]=1;
-				nparams['theta_c'][k,1]=np.random.uniform(a,b);nparams['theta_c'][k,3]=np.random.uniform(a,b);nparams['theta_c'][k,5]=np.random.uniform(a,b)		
-			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c'][k,1])
-			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c'][k,3])
-			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c'][k,5])
+				#nparams['theta_c'][k,1]=np.random.uniform(a,b);nparams['theta_c'][k,3]=np.random.uniform(a,b);nparams['theta_c'][k,5]=np.random.uniform(a,b)		
+				nparams['theta_c'][k,1]=np.random.gamma(a,b);nparams['theta_c'][k,3]=np.random.gamma(a,b);nparams['theta_c'][k,5]=np.random.gamma(a,b)		
+				
+			# ll+=distributions.uniform_logpdf(a,b,nparams['theta_c'][k,1])
+			# ll+=distributions.uniform_logpdf(a,b,nparams['theta_c'][k,3])
+			# ll+=distributions.uniform_logpdf(a,b,nparams['theta_c'][k,5])
+			ll+=scipy.stats.gamma.logpdf(nparams['theta_c'][k,1],a,b)
+			ll+=scipy.stats.gamma.logpdf(nparams['theta_c'][k,3],a,b)
+			ll+=scipy.stats.gamma.logpdf(nparams['theta_c'][k,5],a,b)
+
 		return ll, surface
 
 	def sample_thetac_CRP(self, surface, sample=True):
@@ -241,11 +247,16 @@ class Sampler():
 				if nparams['theta_c_crp'].has_key(cid) == False:
 					nparams['theta_c_crp'][cid]=np.zeros(6)
 				nparams['theta_c_crp'][cid][0]=1;nparams['theta_c_crp'][cid][2]=1;nparams['theta_c_crp'][cid][4]=1;
-				nparams['theta_c_crp'][cid][1]=np.random.uniform(a,b);nparams['theta_c_crp'][cid][3]=np.random.uniform(a,b);nparams['theta_c_crp'][cid][5]=np.random.uniform(a,b)		
-			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c_crp'][cid][1])
-			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c_crp'][cid][3])
-			ll+=distributions.uniform_logpdf(a,b,nparams['theta_c_crp'][cid][5])
-
+				#nparams['theta_c_crp'][cid][1]=np.random.uniform(a,b);nparams['theta_c_crp'][cid][3]=np.random.uniform(a,b);nparams['theta_c_crp'][cid][5]=np.random.uniform(a,b)		
+				nparams['theta_c_crp'][cid][1]=np.random.gamma(a,b);nparams['theta_c_crp'][cid][3]=np.random.gamma(a,b);nparams['theta_c_crp'][cid][5]=np.random.gamma(a,b)		
+				
+			# ll+=distributions.uniform_logpdf(a,b,nparams['theta_c_crp'][cid][1])
+			# ll+=distributions.uniform_logpdf(a,b,nparams['theta_c_crp'][cid][3])
+			# ll+=distributions.uniform_logpdf(a,b,nparams['theta_c_crp'][cid][5])
+			ll+=scipy.stats.gamma.logpdf(nparams['theta_c_crp'][cid][1],a,b)
+			ll+=scipy.stats.gamma.logpdf(nparams['theta_c_crp'][cid][3],a,b)
+			ll+=scipy.stats.gamma.logpdf(nparams['theta_c_crp'][cid][5],a,b)
+			
 		return ll, surface
 
 
@@ -305,16 +316,16 @@ class Sampler():
 		for k in range(surface.K):
 			indxs = np.where(nparams['Z']==k)
 			xindxs = indxs[0]; yindxs = indxs[1]
-			if sample:	nparams['C'][xindxs,yindxs,0]=np.random.beta(nparams['theta_c'][k,0],nparams['theta_c'][k,1],len(nparams['C'][xindxs,yindxs,0]))
-			ll += np.sum(scipy.stats.beta.logpdf(nparams['C'][xindxs,yindxs,0],nparams['theta_c'][k,0],nparams['theta_c'][k,1]))
+			if sample:	nparams['C'][xindxs,yindxs,0]=np.random.beta(nparams['theta_c'][k,0],nparams['theta_c'][k,1],size=len(nparams['C'][xindxs,yindxs,0]))
+			ll += np.sum(distributions.beta_logpdf(nparams['C'][xindxs,yindxs,0],nparams['theta_c'][k,0],nparams['theta_c'][k,1]))
 			# if np.isinf(ll):
 				# pdb.set_trace()
-			if sample:	nparams['C'][xindxs,yindxs,1]=np.random.beta(nparams['theta_c'][k,2],nparams['theta_c'][k,3],len(nparams['C'][xindxs,yindxs,0]))
-			ll += np.sum(scipy.stats.beta.logpdf(nparams['C'][xindxs,yindxs,1],nparams['theta_c'][k,2],nparams['theta_c'][k,3]))		
+			if sample:	nparams['C'][xindxs,yindxs,1]=np.random.beta(nparams['theta_c'][k,2],nparams['theta_c'][k,3],size=len(nparams['C'][xindxs,yindxs,0]))
+			ll += np.sum(distributions.beta_logpdf(nparams['C'][xindxs,yindxs,1],nparams['theta_c'][k,2],nparams['theta_c'][k,3]))		
 			# if np.isinf(ll):
 				# pdb.set_trace()
-			if sample:	nparams['C'][xindxs,yindxs,2]=np.random.beta(nparams['theta_c'][k,4],nparams['theta_c'][k,5],len(nparams['C'][xindxs,yindxs,0]))
-			ll += np.sum(scipy.stats.beta.logpdf(nparams['C'][xindxs,yindxs,2],nparams['theta_c'][k,4],nparams['theta_c'][k,5]))
+			if sample:	nparams['C'][xindxs,yindxs,2]=np.random.beta(nparams['theta_c'][k,4],nparams['theta_c'][k,5],size=len(nparams['C'][xindxs,yindxs,0]))
+			ll += np.sum(distributions.beta_logpdf(nparams['C'][xindxs,yindxs,2],nparams['theta_c'][k,4],nparams['theta_c'][k,5]))
 			# if np.isinf(ll):
 				# pdb.set_trace()
 		return ll, surface
@@ -326,18 +337,18 @@ class Sampler():
 		for k in surface.params['Z_CRPOBJ'].countvec.keys():
 			indxs = np.where(nparams['Z']==k)
 			xindxs = indxs[0]; yindxs = indxs[1]
-			if sample:	nparams['C'][xindxs,yindxs,0]=np.random.beta(nparams['theta_c_crp'][k][0],nparams['theta_c_crp'][k][1],len(nparams['C'][xindxs,yindxs,0]))
-			ll += np.sum(scipy.stats.beta.logpdf(nparams['C'][xindxs,yindxs,0],nparams['theta_c_crp'][k][0],nparams['theta_c_crp'][k][1]))
-			# if np.isinf(ll):
-				# pdb.set_trace()
-			if sample:	nparams['C'][xindxs,yindxs,1]=np.random.beta(nparams['theta_c_crp'][k][2],nparams['theta_c_crp'][k][3],len(nparams['C'][xindxs,yindxs,0]))
-			ll += np.sum(scipy.stats.beta.logpdf(nparams['C'][xindxs,yindxs,1],nparams['theta_c_crp'][k][2],nparams['theta_c_crp'][k][3]))		
-			# if np.isinf(ll):
-				# pdb.set_trace()
-			if sample:	nparams['C'][xindxs,yindxs,2]=np.random.beta(nparams['theta_c_crp'][k][4],nparams['theta_c_crp'][k][5],len(nparams['C'][xindxs,yindxs,0]))
-			ll += np.sum(scipy.stats.beta.logpdf(nparams['C'][xindxs,yindxs,2],nparams['theta_c_crp'][k][4],nparams['theta_c_crp'][k][5]))
-			# if np.isinf(ll):
-				# pdb.set_trace()
+
+			if sample:	nparams['C'][xindxs,yindxs,0]=scipy.stats.beta.rvs(nparams['theta_c_crp'][k][0],nparams['theta_c_crp'][k][1],size=len(nparams['C'][xindxs,yindxs,0]))
+			if sample:	nparams['C'][xindxs,yindxs,1]=scipy.stats.beta.rvs(nparams['theta_c_crp'][k][2],nparams['theta_c_crp'][k][3],size=len(nparams['C'][xindxs,yindxs,0]))
+			if sample:	nparams['C'][xindxs,yindxs,2]=scipy.stats.beta.rvs(nparams['theta_c_crp'][k][4],nparams['theta_c_crp'][k][5],size=len(nparams['C'][xindxs,yindxs,0]))
+
+			ll += np.sum(distributions.beta_logpdf(nparams['C'][xindxs,yindxs,0],nparams['theta_c_crp'][k][0],nparams['theta_c_crp'][k][1]))	
+			ll += np.sum(distributions.beta_logpdf(nparams['C'][xindxs,yindxs,1],nparams['theta_c_crp'][k][2],nparams['theta_c_crp'][k][3]))		
+			ll += np.sum(distributions.beta_logpdf(nparams['C'][xindxs,yindxs,2],nparams['theta_c_crp'][k][4],nparams['theta_c_crp'][k][5]))
+
+			if np.isinf(ll):
+				pdb.set_trace()
+
 		return ll, surface
 
 
@@ -364,12 +375,12 @@ class Sampler():
 	
 				ll, surfaces[i] = self.sample_thetac(surfaces[i],sample=False);new_ll+=ll
 				ll, surfaces[i] = self.sample_C(surfaces[i],sample=False);new_ll+=ll
-				
+	
 			# ll, nparams = self.sample_mu(nparams,sample=False); new_ll+=ll
 	
 			ll, surfaces[i] = self.sample_X(surfaces[i],sample=False); new_ll+=ll
 			ll, self.pflip = self.sample_pflip(sample=False); new_ll += ll
-			
+
 			ll, surfaces[i] = self.sample_tx(surfaces[i],sample=False); new_ll+=ll
 			ll, surfaces[i] = self.sample_ty(surfaces[i],sample=False); new_ll+=ll
 			ll, surfaces[i] = self.sample_tz(surfaces[i],sample=False); new_ll+=ll
@@ -485,7 +496,7 @@ class Sampler():
 	def propose_thetac(self, oid, surface, k, ii):
 		a=surface.params['thetac_a']; b=surface.params['thetac_b']
 		nsurface = copy.deepcopy(surface)
-		nsurface.params['theta_c'][k,ii]=np.random.uniform(a,b)
+		nsurface.params['theta_c'][k,ii]=np.random.gamma(a,b)#np.random.uniform(a,b)
 		new_ll,rendering = self.logl_compute(oid, nsurface)
 		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
 		# for k in range(surface.K):
@@ -498,7 +509,7 @@ class Sampler():
 	def propose_thetac_crp(self, oid, surface, k, ii):
 		a=surface.params['thetac_a']; b=surface.params['thetac_b']
 		nsurface = copy.deepcopy(surface)
-		nsurface.params['theta_c_crp'][k][ii] = np.random.uniform(a,b)
+		nsurface.params['theta_c_crp'][k][ii] = np.random.gamma(a,b)#np.random.uniform(a,b)
 		new_ll,rendering = self.logl_compute(oid, nsurface)
 		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
 
@@ -515,7 +526,11 @@ class Sampler():
 		else:
 			a = nsurface.params['theta_c'][cid,4]
 			b = nsurface.params['theta_c'][cid,5]
-		nsurface.params['C'][xind,yind,channel]=np.random.beta(a,b)
+		sample=np.random.beta(a,b)
+		if sample == 1.0:	sample = 0.99
+		if sample == 0.0:	sample = 0.01
+
+		nsurface.params['C'][xind,yind,channel] = sample
 		new_ll,rendering = self.logl_compute(oid, nsurface)
 		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
 
@@ -637,8 +652,9 @@ class Sampler():
 
 			self.infer_transforms(ii,repeats=1)
 			
-			if DPMIXTURE:
-				print 'CRP-K(OBJ[',ii,'] => ', len(self.surfaces[ii].params['Z_CRPOBJ'].countvec)
+			print self.ll
+			# if DPMIXTURE:
+				# print 'CRP-K(OBJ[',ii,'] => ', len(self.surfaces[ii].params['Z_CRPOBJ'].countvec)
 		print
 
 	def RJMCMC_BIRTH(self):
@@ -657,6 +673,8 @@ class Sampler():
 		print 'birth attempt'
 
 	def RJMCMC_DEATH(self):
+		if len(self.surfaces.keys()) == 0:
+			return
 		nsurfaces = copy.deepcopy(self.surfaces)
 		keys = nsurfaces.keys()
 		indx = np.random.randint(0,len(keys))
@@ -684,7 +702,7 @@ class Sampler():
 			elif chosen == 2:
 				self.RJMCMC_DEATH()
 
-			if (itr%10) == 0:
+			if (itr%2) == 0:
 				print 'saving ...'
 				rendering = bezier.display(self.surfaces, capture=True)/255.0
 				scipy.misc.imsave('image_dump/'+str(itr)+'.png', rendering)

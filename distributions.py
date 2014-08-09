@@ -1,8 +1,8 @@
 import numpy as np
 import pdb,math,copy
 from scipy.special import gammaln
+from scipy.special import betaln
 from numpy import array, log, exp
-
 
 class CRP():
 
@@ -46,10 +46,9 @@ class CRP():
 		N = self.N; alpha = self.alpha
 		cur_cid = self.Z[indx]
 
-		print 'ZZ:',np.unique(self.Z)
-		print 'CV:',self.countvec.keys()
-		print self.countvec
-
+		# print 'ZZ:',np.unique(self.Z)
+		# print 'CV:',self.countvec.keys()
+		# print self.countvec
 
 		countvec = self.countvec
 		countvec[cur_cid] -= 1
@@ -77,8 +76,8 @@ class CRP():
 			countvec[chosen_cid]=1
 
 		self.Z[indx] = chosen_cid
-		print 'chosen:', chosen_cid
-		print '------'
+		# print 'chosen:', chosen_cid
+		# print '------'
 		return chosen_cid
 
 	def logpdf(self):
@@ -113,12 +112,16 @@ def gamma_logpdf(k,theta,x):
 def normal_logpdf(mu,var,x):
 	return -(((x-mu)**2)/(2*var**2)) - (log(var)+0.5*log(2*math.pi))
 
-
+def beta_logpdf(x,a,b):
+	x_clip=np.clip(x,0.01,0.99)
+	return (a-1)*log(x_clip)+(b-1)*log(1-x_clip) - betaln(a,b)
+	
 def uniform_logpdf(a,b,x):
 	if len(np.shape(x)) == 0:
 		if x>=a and x<=b:
 			return -log(b-a)
 		else:
+			pdb.set_trace()
 			return log(0)
 	else:
 		if (x >= a).all() and (x <= b).all():
@@ -127,6 +130,7 @@ def uniform_logpdf(a,b,x):
 			else:
 				return -log(b-a)
 		else:
+			pdb.set_trace()
 			return log(0)
 
 
