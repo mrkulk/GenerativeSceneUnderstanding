@@ -116,6 +116,9 @@ def beta_logpdf(x,a,b):
 	x_clip=np.clip(x,0.01,0.99)
 	return (a-1)*log(x_clip)+(b-1)*log(1-x_clip) - betaln(a,b)
 	
+def gamma_logpdf(X,a,b):
+	return (a-1)*log(X)-((X*1.0)/b)-a*log(b)-gammaln(a)
+
 def uniform_logpdf(a,b,x):
 	if len(np.shape(x)) == 0:
 		if x>=a and x<=b:

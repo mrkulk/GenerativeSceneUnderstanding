@@ -34,7 +34,7 @@ class BezierPatch():
 		xMin, xMax, yMin, yMax = -0.5, 0.5, -0.5, 0.5
 		xStep = (xMax-xMin)/(self.nPts-1)
 		yStep = (yMax-yMin)/(self.nPts-1)
-		self.divisionsGL = 50
+		self.divisionsGL = 40
 
 		# initialise a list representing a regular 2D grid of control points.
 		# self.controlPoints = [ \
@@ -63,16 +63,16 @@ class BezierPatch():
 		#latents
 		self.params = {
 				#hypers
-				'lambda_x':10,
-				'lambda_c':10,
+				'lambda_x':10.0,
+				'lambda_c':10.0,
 				'X_var':0.2,
-				'mu_l':-2,
-				'mu_u':0,
-				'X_l':0,
-				'X_u':1,
+				'mu_l':-2.0,
+				'mu_u':0.0,
+				'X_l':0.0,
+				'X_u':1.0,
 				'pflip':0.01,
-				'thetac_a': 1,#0.1,
-				'thetac_b': 1,#0.9,
+				'thetac_a': 2.0,#0.1,
+				'thetac_b': 2.0,#0.9,
 				#latents
 				'Z': np.zeros((self.nPts,self.nPts)),
 				'theta_c': np.zeros((self.K,3*2)),#rgb
@@ -105,10 +105,11 @@ class BezierPatch():
 
 	def synthetic_render(self):
 		glEnable(GL_COLOR_MATERIAL)
-		glColor3f(0.7,0.2,0.1)
+		glColor3f(0.1,0.8,0.1)
 		#glutSolidCube(1)
 		# glutSolidCone(0.4,0.7,20,20)
-		glutSolidSphere(0.4,20,20)
+		#glutSolidSphere(0.4,20,20)
+		glutSolidTeapot(0.5)
 
 	def render(self):
 		# plot all surface patches
@@ -179,7 +180,7 @@ def display(surfaces, capture=False):
 	if GENERATE_DATA:
 		glPushMatrix()
 		glTranslatef( 0, 0, -3 )
-		glRotatef( -60, 0.4, 1, 0)
+		glRotatef( -180, 1, 0, 0)
 		surface.synthetic_render()
 		glPopMatrix()
 		captureImage(save=True)
