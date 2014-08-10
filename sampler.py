@@ -20,7 +20,7 @@ INF_ALL_DIM_X = False
 
 
 
-class Sampler():
+class Object():
 	def __init__(self):
 		self.alpha = 0.1 #CRP hyper
 		self.gpyramid = False
