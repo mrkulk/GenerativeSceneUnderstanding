@@ -124,7 +124,7 @@ def uniform_logpdf(a,b,x):
 		if x>=a and x<=b:
 			return -log(b-a)
 		else:
-			pdb.set_trace()
+			# pdb.set_trace()
 			return log(0)
 	else:
 		if (x >= a).all() and (x <= b).all():
@@ -133,7 +133,7 @@ def uniform_logpdf(a,b,x):
 			else:
 				return -log(b-a)
 		else:
-			pdb.set_trace()
+			# pdb.set_trace()
 			return log(0)
 
 

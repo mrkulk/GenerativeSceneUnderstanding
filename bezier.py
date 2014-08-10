@@ -26,15 +26,26 @@ HEIGHT=300
 
 GENERATE_DATA = False
 
+rotAngle = 0;
+
+MULTIPATCH = False
+
 class BezierPatch():
 	def __init__(self):
 		# number of patches in x and y direction
-		self.nPts = 10
+		if MULTIPATCH:
+			self.psize = 5
+			self.divisions=3
+			self.nPts = self.divisions*(self.psize-1)+1
+		else:
+			self.nPts = 6
 		self.K = 2
 		xMin, xMax, yMin, yMax = -0.5, 0.5, -0.5, 0.5
 		xStep = (xMax-xMin)/(self.nPts-1)
 		yStep = (yMax-yMin)/(self.nPts-1)
 		self.divisionsGL = 40
+
+		
 
 		# initialise a list representing a regular 2D grid of control points.
 		# self.controlPoints = [ \
@@ -58,17 +69,20 @@ class BezierPatch():
 		# self.patch = np.zeros((self.psize,self.psize, 3))
 		
 		# self.patch_color = [ [ [ ] for x in range( 4 )] for y in range( 4 ) ]
-		self.patch_color = np.zeros((self.nPts,self.nPts,4))
+		if MULTIPATCH:
+			self.patch_color = np.zeros((self.psize,self.psize, 4))	
+		else:
+			self.patch_color = np.zeros((self.nPts,self.nPts,4))
 
 		#latents
 		self.params = {
 				#hypers
-				'lambda_x':10.0,
+				'lambda_x':100.0,
 				'lambda_c':10.0,
-				'X_var':0.2,
+				'X_var':0.005,
 				'mu_l':-2.0,
 				'mu_u':0.0,
-				'X_l':0.0,
+				'X_l':-1.0,
 				'X_u':1.0,
 				'pflip':0.01,
 				'thetac_a': 2.0,#0.1,
@@ -94,50 +108,59 @@ class BezierPatch():
 		self.params['X']=copy.deepcopy(self.controlPoints)
 
 
-
-	# def updateControlPoints(self,pts):
-	# 	#self.controlPoints[:,:,2] = np.random.normal(0,1,(self.nPts,self.nPts))
-	# 	# self.controlPoints[0:8,0:8,2]-=1
-	# 	self.controlPoints = pts
-
-	# def updateColors(self,colors):
-	# 	self.colors = colors
-
 	def synthetic_render(self):
 		glEnable(GL_COLOR_MATERIAL)
-		glColor3f(0.1,0.8,0.1)
-		#glutSolidCube(1)
-		# glutSolidCone(0.4,0.7,20,20)
+		glColor3f(0.7,0.1,0.1)
+		#glutSolidCube(0.6)
+		glutSolidCone(0.4,0.7,20,20)
 		#glutSolidSphere(0.4,20,20)
-		glutSolidTeapot(0.5)
+		#glutSolidTeapot(0.5)
 
 	def render(self):
 		# plot all surface patches
 		# loop over all patches+
 		#self.updateControlPoints(0)
-
 		glTranslatef(self.params['tx'],self.params['ty'],self.params['tz'])
 		glRotatef(self.params['rx'],1,0,0)
 		glRotatef(self.params['ry'],0,1,0)
 		glRotatef(self.params['rz'],0,0,1)
 		glScalef(self.params['sx'],self.params['sy'],self.params['sz'])
-		# self.patch = self.controlPoints[x:x+self.psize,y:y+self.psize,:]
-		self.patch_color[:,:,3]=1
-		# self.patch_color[:,:,0:3]=np.random.rand(self.nPts,self.nPts,3)#[0.5,0.1,0]
 
-		#self.patch_color[:,:,0:3] = self.colors
-		self.patch_color[:,:,0:3] = self.params['C']
+		if MULTIPATCH:
 
-		self.controlPoints = self.params['X']
+			for y in range( 0, self.nPts-1, self.psize-1):
+				for x in range( 0, self.nPts-1, self.psize-1):
+					# display the current patch
+					self.patch = self.params['X'][x:x+self.psize,y:y+self.psize,:]
+					self.patch_color[:,:,3]=1
+					self.patch_color[:,:,0:3] = self.params['C'][x:x+self.psize,y:y+self.psize,:]
 
-		glEnable(GL_COLOR_MATERIAL)
-		glEnable(GL_MAP2_VERTEX_3);
-		glEnable(GL_MAP2_COLOR_4);
-		glEnable(GL_AUTO_NORMAL);
-		glMap2f( GL_MAP2_VERTEX_3, 0, 1, 0, 1, self.controlPoints )
-		glMap2f(GL_MAP2_COLOR_4, 0,1,0,1,self.patch_color)
-		glMapGrid2f( self.divisionsGL, 0.0, 1.0, self.divisionsGL, 0.0, 1.0 )
-		glEvalMesh2( GL_FILL, 0, self.divisionsGL, 0, self.divisionsGL )
+					glEnable(GL_COLOR_MATERIAL)
+					glEnable(GL_MAP2_VERTEX_3);
+					glEnable(GL_MAP2_COLOR_4);
+					glEnable(GL_AUTO_NORMAL);
+					glMap2f( GL_MAP2_VERTEX_3, 0, 1, 0, 1, self.patch )
+					glMap2f(GL_MAP2_COLOR_4, 0,1,0,1,self.patch_color)
+					glMapGrid2f( self.divisionsGL, 0.0, 1.0, self.divisionsGL, 0.0, 1.0 )
+					glEvalMesh2( GL_FILL, 0, self.divisionsGL, 0, self.divisionsGL )
+
+		else:
+			# self.patch = self.controlPoints[x:x+self.psize,y:y+self.psize,:]
+			self.patch_color[:,:,3]=1
+			# self.patch_color[:,:,0:3]=np.random.rand(self.nPts,self.nPts,3)#[0.5,0.1,0]
+
+			#self.patch_color[:,:,0:3] = self.colors
+			self.patch_color[:,:,0:3] = self.params['C']
+
+			glEnable(GL_COLOR_MATERIAL)
+			glEnable(GL_MAP2_VERTEX_3);
+			glEnable(GL_MAP2_COLOR_4);
+			glEnable(GL_AUTO_NORMAL);
+			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+			glMap2f( GL_MAP2_VERTEX_3, 0, 1, 0, 1, self.params['X'] )
+			glMap2f(GL_MAP2_COLOR_4, 0,1,0,1,self.patch_color)
+			glMapGrid2f( self.divisionsGL, 0.0, 1.0, self.divisionsGL, 0.0, 1.0 )
+			glEvalMesh2( GL_FILL, 0, self.divisionsGL, 0, self.divisionsGL )
 
 
 
@@ -151,7 +174,7 @@ def captureImage(fname='obs.png', save=False):
 	return image
 
 
-def display(surfaces, capture=False):
+def display(DATA, capture=False):
 	glEnable( GL_LIGHTING )
 	glEnable( GL_LIGHT0 )
 	glLightModeli( GL_LIGHT_MODEL_TWO_SIDE, 0 )
@@ -172,24 +195,32 @@ def display(surfaces, capture=False):
 	glMatrixMode( GL_PROJECTION )
 	glLoadIdentity( )
 	xSize, ySize = glutGet( GLUT_WINDOW_WIDTH ), glutGet( GLUT_WINDOW_HEIGHT )
-	gluPerspective(40, float(xSize) / float(ySize), 0.1, 50)
+	#gluPerspective(40, float(xSize) / float(ySize), 0.1, 50)
+	glOrtho(-1,1,-1,1,0.1,50)
 	glMatrixMode( GL_MODELVIEW )
 	glLoadIdentity( )
 
 
 	if GENERATE_DATA:
+		global rotAngle
 		glPushMatrix()
 		glTranslatef( 0, 0, -3 )
-		glRotatef( -180, 1, 0, 0)
+		#glRotatef( -180, 1, 0, 0)
+		#glRotatef( 45, 1, 1, 0)
+		glRotatef( rotAngle, 1, 1, 0); rotAngle+=10
 		surface.synthetic_render()
 		glPopMatrix()
-		captureImage(save=True)
+		captureImage(fname='obs_'+str(rotAngle)+'.png',save=True)
 		glutSwapBuffers( )
 	else:
+		surfaces = DATA['surfaces']
+		angle = DATA['rot_angle']
 		glPushMatrix()
 		glTranslatef( 0, 0, -4 )
 		#glRotatef( -45, 0, 1, 0)
 		#glRotatef( np.random.uniform(0,360), 0,0,1)
+		if angle != None:
+			glRotatef(angle,1,1,0)
 		for ii in surfaces.keys():
 			glPushMatrix()
 			surfaces[ii].render()
@@ -221,6 +252,7 @@ def init(  ):
 	
 	glEnable( GL_DEPTH_TEST )
 	glShadeModel( GL_SMOOTH )
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
 def setup():
 	glutInit( sys.argv )
@@ -235,8 +267,9 @@ def setup():
 	#glutMainLoop()
 
 if __name__ == "__main__":
+	GENERATE_DATA = True
 	setup()
 	surface = BezierPatch()
 	for ii in range(10):
-		display(surface)
+		display({'surfaces':surface,'T':0})
 
