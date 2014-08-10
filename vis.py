@@ -81,10 +81,11 @@ def setup():
 if __name__ == "__main__":
 	surface = bezier.BezierPatch()
 	data = pickle.load(open('params.pkl','rb'))
-	surface.updateColors(data['params']['C'])
-	surface.updateControlPoints(data['params']['X'])
-	surface.divisions = data['divisions']
-	surface.nPts = data['nPts']
+	surface = data['params']
+	# surface.updateColors(data['params']['C'])
+	# surface.updateControlPoints(data['params']['X'])
+	# surface.divisions = data['divisions']
+	# surface.nPts = data['nPts']
 	setup()
 
 	

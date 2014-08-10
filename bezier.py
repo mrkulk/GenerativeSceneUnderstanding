@@ -26,10 +26,10 @@ HEIGHT=300
 
 GENERATE_DATA = False
 
-rotAngle = 0;
+translate_obj = 0;
 
 MULTIPATCH = False
-
+GCNT=0
 class BezierPatch():
 	def __init__(self):
 		# number of patches in x and y direction
@@ -108,13 +108,31 @@ class BezierPatch():
 		self.params['X']=copy.deepcopy(self.controlPoints)
 
 
-	def synthetic_render(self):
+	def synthetic_render(self, translate_obj):
 		glEnable(GL_COLOR_MATERIAL)
+		# glColor3f(0.7,0.1,0.1)
+		# glutSolidCube(0.6)
+		# glutSolidCone(0.4,0.7,20,20)
+		# glutSolidCylinder(0.3,0.6,20,20)
+		# glutSolidSphere(0.4,20,20)
+		# glutSolidTeapot(0.5)
+
+		# glPushMatrix()
+		# glColor3f(0.3,0.3,0.6)
+		# glTranslatef(0,translate_obj,0)
+		# glutSolidSphere(0.2,30,30)
+		# glPopMatrix()
+
+		glPushMatrix()
+		glTranslatef(0,0.5,0)
+		glRotatef(60,1,0,0)
 		glColor3f(0.7,0.1,0.1)
-		#glutSolidCube(0.6)
-		glutSolidCone(0.4,0.7,20,20)
-		#glutSolidSphere(0.4,20,20)
-		#glutSolidTeapot(0.5)
+		# glutSolidCylinder(0.4,0.4,20,20)
+		quadric=gluNewQuadric()
+		gluQuadricNormals(quadric, GLU_SMOOTH);
+		gluQuadricTexture(quadric, GL_TRUE);
+		gluCylinder(quadric,0.4,0.4,0.5,30,30);	
+		glPopMatrix()
 
 	def render(self):
 		# plot all surface patches
@@ -173,6 +191,18 @@ def captureImage(fname='obs.png', save=False):
 	if save:	scipy.misc.imsave(fname,image)
 	return image
 
+def drawGround():
+	glPushMatrix()
+	glRotatef(-30,1,0,0)
+	glColor3f(0.6,0.6,0.6)
+	glBegin(GL_QUADS)
+	glVertex3f(-1,0, -1)
+	glVertex3f(-1,0, 1)
+	glVertex3f(1,0, 1)
+	glVertex3f(1,0, -1)
+	glEnd()
+	glPopMatrix()
+	return
 
 def display(DATA, capture=False):
 	glEnable( GL_LIGHTING )
@@ -180,6 +210,7 @@ def display(DATA, capture=False):
 	glLightModeli( GL_LIGHT_MODEL_TWO_SIDE, 0 )
 	
 	glLightfv( GL_LIGHT0, GL_POSITION, [1, 0.2, -1.5, 1] )
+
 	# xx=2*math.cos(np.random.uniform(0,360))
 	# yy=2*math.sin(np.random.uniform(0,360))
 	# zz=np.random.uniform(5,6)
@@ -200,17 +231,23 @@ def display(DATA, capture=False):
 	glMatrixMode( GL_MODELVIEW )
 	glLoadIdentity( )
 
-
 	if GENERATE_DATA:
-		global rotAngle
+		global translate_obj,GCNT
 		glPushMatrix()
 		glTranslatef( 0, 0, -3 )
 		#glRotatef( -180, 1, 0, 0)
-		#glRotatef( 45, 1, 1, 0)
-		glRotatef( rotAngle, 1, 1, 0); rotAngle+=10
-		surface.synthetic_render()
+		# glRotatef( 45, 1, 1, 0)
+
+		if translate_obj > 0.6:
+			translate_obj -= 0.1
+		else:
+			translate_obj += 0.1
+		surface.synthetic_render(translate_obj);
 		glPopMatrix()
-		captureImage(fname='obs_'+str(rotAngle)+'.png',save=True)
+		
+		captureImage(fname='data/infant_seq1/obs_'+str(GCNT)+'.png',save=True)
+		GCNT+=1
+
 		glutSwapBuffers( )
 	else:
 		surfaces = DATA['surfaces']
@@ -226,6 +263,7 @@ def display(DATA, capture=False):
 			surfaces[ii].render()
 			glPopMatrix()
 		glPopMatrix()
+
 		if capture:	
 			captured_image = captureImage()
 			glutSwapBuffers( )

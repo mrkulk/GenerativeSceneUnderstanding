@@ -9,20 +9,23 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import scipy.ndimage
 
-RJMCMC = True
+RJMCMC = False
 parallel = True
 DELAYED_REJECTION = True
 DPMIXTURE = True
 BIRTH_DR_TOTAL_INTERMEDIATE_PROPOSAL = 10
-MOTION = False
+MOTION_INFERENCE = False
 INF_ALL_DIM_X = False
+
+
+
 
 class Sampler():
 	def __init__(self):
 		self.alpha = 0.1 #CRP hyper
 		self.gpyramid = False
 		self.gpr_layers = [4,8,10] #number of gpr layers
-		self.move_probabilities = [0.90,0.05,0.05] #update,birth,death
+		self.move_probabilities = [0.9,0.05,0.05] #update,birth,death
 		self.surfaces = dict()
 		# self.surface = bsurface
 		# self.patch_dict = dict()
@@ -83,7 +86,7 @@ class Sampler():
 
 
 	def sample_prior(self):
-		ret_ll = 0
+		ret_ll=0
 		self.surfaces[0] = bezier.BezierPatch()
 		ll, self.surfaces[0] = self.sample_prior_object(self.surfaces[0]); ret_ll+=ll
 		ll,_ = self.logl_compute(oid=None, new_surface=None, cur_surfaces=self.surfaces); ret_ll+=ll
@@ -450,7 +453,7 @@ class Sampler():
 		variance = 0.01
 
 		#render all surfaces
-		if MOTION:
+		if MOTION_INFERENCE:
 			rendering = dict()
 			for kk in range(len(self.obs)):
 				rendering[kk] = bezier.display({'surfaces':surfaces,'rot_angle':self.rot_angles[kk]}, capture=True)/255.0
@@ -822,7 +825,7 @@ class Sampler():
 
 			if (itr%35) == 0:
 				print 'saving ...'
-				if MOTION:
+				if MOTION_INFERENCE:
 					rendering=dict()
 					for kk in range(len(self.obs)):
 						rendering[kk] = bezier.display({'surfaces':self.surfaces,'rot_angle':self.rot_angles[kk]}, capture=True)/255.0
@@ -835,13 +838,15 @@ class Sampler():
 
 
 
+
+
 if __name__ == "__main__":
 	bezier.setup()
 	S = Sampler()
-	if MOTION:
+	if MOTION_INFERENCE:
 		S.set_observation_sequence("data/seq1")
 	else:
-		S.set_observation("obs_pot.png")
+		S.set_observation("obs_s4.png")
 	S.infer(10000)
 
 
