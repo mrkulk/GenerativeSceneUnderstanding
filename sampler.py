@@ -8,24 +8,25 @@ from skimage import filter
 import matplotlib.pyplot as plt
 from PIL import Image
 import scipy.ndimage
+import pymeanshift as pms
 
-RJMCMC = False
+
+RJMCMC = True
 parallel = True
 DELAYED_REJECTION = True
 DPMIXTURE = True
-BIRTH_DR_TOTAL_INTERMEDIATE_PROPOSAL = 10
+BIRTH_DR_TOTAL_INTERMEDIATE_PROPOSAL = 5
 MOTION_INFERENCE = False
-INF_ALL_DIM_X = False
+INF_ALL_DIM_X = True
+SHARING = False #During RJMCMC, create new surface color with existing. may help in some cases
+DATA_DRIVEN = True
 
-
-
-
-class Object():
+class Sampler():
 	def __init__(self):
-		self.alpha = 0.1 #CRP hyper
+		self.alpha = 0.05 #CRP hyper
 		self.gpyramid = False
 		self.gpr_layers = [4,8,10] #number of gpr layers
-		self.move_probabilities = [0.9,0.05,0.05] #update,birth,death
+		self.move_probabilities = [0.94,0.03,0.03] #update,birth,death
 		self.surfaces = dict()
 		# self.surface = bsurface
 		# self.patch_dict = dict()
@@ -70,8 +71,8 @@ class Object():
 		#if move != 'birth': #we initialize block with existing one for faster convergence
 		ll, surface = self.sample_X(surface); ret_ll+=ll
 		
-		ll, surface = self.sample_tx(surface); ret_ll+=ll
-		ll, surface = self.sample_ty(surface); ret_ll+=ll
+		ll, surface = self.sample_tx_ty(surface,'tx'); ret_ll+=ll
+		ll, surface = self.sample_tx_ty(surface,'ty'); ret_ll+=ll
 		ll, surface = self.sample_tz(surface); ret_ll+=ll
 		
 		ll, surface = self.sample_rx(surface); ret_ll+=ll
@@ -79,7 +80,7 @@ class Object():
 		ll, surface = self.sample_rz(surface); ret_ll+=ll
 		
 		ll, surface = self.sample_sx(surface); ret_ll+=ll
-		ll, surface = self.sample_sy(surface); ret_ll+=ll
+		# ll, surface = self.sample_sy(surface); ret_ll+=ll
 		# ll, surface = self.sample_sz(surface); ret_ll+=ll			
 		
 		return ret_ll, surface
@@ -87,26 +88,59 @@ class Object():
 
 	def sample_prior(self):
 		ret_ll=0
-		self.surfaces[0] = bezier.BezierPatch()
-		ll, self.surfaces[0] = self.sample_prior_object(self.surfaces[0]); ret_ll+=ll
-		ll,_ = self.logl_compute(oid=None, new_surface=None, cur_surfaces=self.surfaces); ret_ll+=ll
+		if DATA_DRIVEN:
+			# self.active_labels = []
+			# self.active_range = []
+			# self.number_regions = number_regions
+			for ii in range(self.number_regions):
+				self.surfaces[ii] = bezier.BezierPatch()
+				ll, self.surfaces[ii] = self.sample_prior_object(self.surfaces[ii]); ret_ll+=ll
+				tmp = self.active_range[ii]
+				col = tmp[0]; row=tmp[1]
+				self.surfaces[ii].params['sx']=0.25
+				self.surfaces[ii].params['rx']=0
+				self.surfaces[ii].params['ry']=0
+				self.surfaces[ii].params['rz']=0
+				self.surfaces[ii].params['tx']=-1 + (2.0*row)/bezier.WIDTH
+				self.surfaces[ii].params['ty']=-1 + (2.0*col)/bezier.HEIGHT				
+				self.surfaces[ii].params['tx_data']=-1 + (2.0*row)/bezier.WIDTH
+				self.surfaces[ii].params['ty_data']=-1 + (2.0*row)/bezier.HEIGHT
+
+				self.surfaces[ii].params['C_data']=dict()
+				for jj in range(3):	
+					self.surfaces[ii].params['C'][:,:,jj]=self.data_colors[ii][jj]
+					self.surfaces[ii].params['C_data'][jj]=self.data_colors[ii][jj]
+
+				ll,_ = self.logl_compute(oid=None, new_surface=None, cur_surfaces=self.surfaces); ret_ll+=ll	
+		else:
+			self.surfaces[0] = bezier.BezierPatch()
+			ll, self.surfaces[0] = self.sample_prior_object(self.surfaces[0]); ret_ll+=ll
+			ll,_ = self.logl_compute(oid=None, new_surface=None, cur_surfaces=self.surfaces); ret_ll+=ll
 		return ret_ll
 
-	def sample_tx(self, surface, sample=True):
+	def sample_tx_ty(self, surface, dim, sample=True):
 		nparams = surface.params
 		a=-0.5;b=0.5
 		# a=0;b=0.1
-		if sample: nparams['tx']=np.random.uniform(a,b)
-		ll = distributions.uniform_logpdf(a,b,nparams['tx'])
+		ll=0
+		if sample: 
+			if np.random.rand()>0.5 and DATA_DRIVEN and nparams[dim] != None and nparams.has_key(dim+'_data'):
+				done = False; 
+				mu = nparams[dim+'_data']
+				sigma = 0.0001
+				old_sample = nparams[dim]
+				new_val = np.random.normal(mu,sigma)
+				while (done == True):
+					if new_val >= a and new_val <= b:
+						done=True
+					new_val = np.random.normal(mu,sigma)
+				nparams[dim] = new_val
+				ll += scipy.stats.multivariate_normal.logpdf(new_val,old_sample,sigma) - scipy.stats.multivariate_normal.logpdf(old_sample, new_val,sigma)
+			else:
+				nparams[dim]=np.random.uniform(a,b)
+		ll = distributions.uniform_logpdf(a,b,nparams[dim])
 		return ll, surface
 
-	def sample_ty(self, surface, sample=True):
-		nparams = surface.params
-		a=-0.5;b=0.5
-		# a=0;b=0.1
-		if sample: nparams['ty']=np.random.uniform(a,b)
-		ll = distributions.uniform_logpdf(a,b,nparams['ty'])
-		return ll, surface
 
 	def sample_tz(self, surface, sample=True):
 		nparams = surface.params
@@ -116,6 +150,7 @@ class Object():
 		return ll, surface
 
 	def sample_rx(self, surface, sample=True):
+		# return 0, surface
 		nparams = surface.params
 		a=-30;b=30
 		if sample: nparams['rx']=np.random.uniform(a,b)
@@ -123,13 +158,15 @@ class Object():
 		return ll, surface
 
 	def sample_ry(self, surface, sample=True):
+		# return 0, surface
 		nparams = surface.params
-		a=-30;b=30
+		a=-10;b=10
 		if sample: nparams['ry']=np.random.uniform(a,b)
 		ll = distributions.uniform_logpdf(a,b,nparams['ry'])
 		return ll, surface
 
 	def sample_rz(self, surface, sample=True):
+		# return 0, surface
 		nparams = surface.params
 		a=-30;b=30
 		if sample: nparams['rz']=np.random.uniform(a,b)
@@ -139,22 +176,23 @@ class Object():
 	def sample_sx(self, surface, sample=True):
 		nparams = surface.params
 		if RJMCMC:
-			a=0.2;b=0.7
+			a=0.2;b=0.9
 		else:
 			a=1.0;b=1.5
 		if sample: nparams['sx']=np.random.uniform(a,b)
 		ll = distributions.uniform_logpdf(a,b,nparams['sx'])
 		return ll, surface
 
-	def sample_sy(self, surface, sample=True):
-		nparams = surface.params
-		if RJMCMC:
-			a=0.2;b=0.7
-		else:
-			a=1.0;b=1.5
-		if sample: nparams['sy']=np.random.uniform(a,b)
-		ll = distributions.uniform_logpdf(a,b,nparams['sy'])
-		return ll, surface
+	# def sample_sy(self, surface, sample=True):
+
+	# 	nparams = surface.params
+	# 	if RJMCMC:
+	# 		a=0.2;b=0.9
+	# 	else:
+	# 		a=1.0;b=1.5
+	# 	if sample: nparams['sy']=np.random.uniform(a,b)
+	# 	ll = distributions.uniform_logpdf(a,b,nparams['sy'])
+	# 	return ll, surface
 
 	# def sample_sz(self, surface, sample=True):
 	# 	nparams = surface.params
@@ -434,8 +472,8 @@ class Object():
 			ll, self.pflip = self.sample_pflip(sample=False); new_ll += ll
 			if np.isinf(ll):	pdb.set_trace()
 
-			ll, surfaces[i] = self.sample_tx(surfaces[i],sample=False); new_ll+=ll
-			ll, surfaces[i] = self.sample_ty(surfaces[i],sample=False); new_ll+=ll
+			ll, surfaces[i] = self.sample_tx_ty(surfaces[i],'tx',sample=False); new_ll+=ll
+			ll, surfaces[i] = self.sample_tx_ty(surfaces[i],'ty',sample=False); new_ll+=ll
 			ll, surfaces[i] = self.sample_tz(surfaces[i],sample=False); new_ll+=ll
 			
 			ll, surfaces[i] = self.sample_rx(surfaces[i],sample=False); new_ll+=ll
@@ -443,7 +481,7 @@ class Object():
 			ll, surfaces[i] = self.sample_rz(surfaces[i],sample=False); new_ll+=ll
 			
 			ll, surfaces[i] = self.sample_sx(surfaces[i],sample=False); new_ll+=ll
-			ll, surfaces[i] = self.sample_sy(surfaces[i],sample=False); new_ll+=ll
+			# ll, surfaces[i] = self.sample_sy(surfaces[i],sample=False); new_ll+=ll
 			# ll, surfaces[i] = self.sample_sz(surfaces[i],sample=False); new_ll+=ll
 
 			#pass params to renderer
@@ -496,9 +534,9 @@ class Object():
 	def propose_translation(self,oid, surface, cur_surfaces, dim):
 		nsurface = copy.deepcopy(surface)
 		if dim == 0:
-			_,nsurface = self.sample_tx(nsurface,sample=True)
+			_,nsurface = self.sample_tx_ty(nsurface,'tx',sample=True)
 		elif dim == 1:
-			_,nsurface = self.sample_ty(nsurface,sample=True)
+			_,nsurface = self.sample_tx_ty(nsurface,'ty',sample=True)
 		elif dim == 2:
 			_,nsurface = self.sample_tz(nsurface, sample=True)
 		new_ll,rendering = self.logl_compute(oid=oid,new_surface=nsurface, cur_surfaces=cur_surfaces)
@@ -579,39 +617,51 @@ class Object():
 		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
 
 
-	def propose_C(self,oid, surface,cur_surfaces,xind,yind,channel):
-		nsurface = copy.deepcopy(surface)
-		cid = nsurface.params['Z'][xind,yind]
-		if channel == 0:
-			a = nsurface.params['theta_c'][cid,0]
-			b = nsurface.params['theta_c'][cid,1]
-		elif channel == 1:
-			a = nsurface.params['theta_c'][cid,2]
-			b = nsurface.params['theta_c'][cid,3]
-		else:
-			a = nsurface.params['theta_c'][cid,4]
-			b = nsurface.params['theta_c'][cid,5]
-		sample=np.random.beta(a,b)
-		if sample == 1.0:	sample = 0.99
-		if sample == 0.0:	sample = 0.01
+	# def propose_C(self,oid, surface,cur_surfaces,xind,yind,channel):
+	# 	nsurface = copy.deepcopy(surface)
+	# 	cid = nsurface.params['Z'][xind,yind]
+	# 	if channel == 0:
+	# 		a = nsurface.params['theta_c'][cid,0]
+	# 		b = nsurface.params['theta_c'][cid,1]
+	# 	elif channel == 1:
+	# 		a = nsurface.params['theta_c'][cid,2]
+	# 		b = nsurface.params['theta_c'][cid,3]
+	# 	else:
+	# 		a = nsurface.params['theta_c'][cid,4]
+	# 		b = nsurface.params['theta_c'][cid,5]
+	# 	sample=np.random.beta(a,b)
+	# 	if sample == 1.0:	sample = 0.99
+	# 	if sample == 0.0:	sample = 0.01
 
-		nsurface.params['C'][xind,yind,channel] = sample
-		new_ll,rendering = self.logl_compute(oid=oid,new_surface=nsurface, cur_surfaces=cur_surfaces)
-		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
+	# 	nsurface.params['C'][xind,yind,channel] = sample
+	# 	new_ll,rendering = self.logl_compute(oid=oid,new_surface=nsurface, cur_surfaces=cur_surfaces)
+	# 	return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
 
 	def propose_C_CRP(self,oid, surface,cur_surfaces,xind,yind,channel):
 		nsurface = copy.deepcopy(surface)
-		cid = nsurface.params['Z'][xind,yind]
-		if channel == 0:
-			a = nsurface.params['theta_c_crp'][cid][0]
-			b = nsurface.params['theta_c_crp'][cid][1]
-		elif channel == 1:
-			a = nsurface.params['theta_c_crp'][cid][2]
-			b = nsurface.params['theta_c_crp'][cid][3]
+		new_ll=0
+		if DATA_DRIVEN and np.random.rand()>0.5 and nsurface.params.has_key('C_data'):
+			old_val = nsurface.params['C'][xind,yind,channel];val=None; done = False
+			mu = nsurface.params['C_data'][channel]; sigma = 0.001
+			val = np.random.normal(mu,sigma)
+			while done == False:
+				if val <= 1 and val >= 0:
+					done = True
+				val = np.random.normal(mu,sigma)
+			nsurface.params['C'][xind,yind,channel] = val
+			new_ll +=  scipy.stats.multivariate_normal.logpdf(val,old_val,sigma) - scipy.stats.multivariate_normal.logpdf(old_val, val,sigma)
 		else:
-			a = nsurface.params['theta_c_crp'][cid][4]
-			b = nsurface.params['theta_c_crp'][cid][5]
-		nsurface.params['C'][xind,yind,channel]=np.random.beta(a,b)
+			cid = nsurface.params['Z'][xind,yind]
+			if channel == 0:
+				a = nsurface.params['theta_c_crp'][cid][0]
+				b = nsurface.params['theta_c_crp'][cid][1]
+			elif channel == 1:
+				a = nsurface.params['theta_c_crp'][cid][2]
+				b = nsurface.params['theta_c_crp'][cid][3]
+			else:
+				a = nsurface.params['theta_c_crp'][cid][4]
+				b = nsurface.params['theta_c_crp'][cid][5]
+			nsurface.params['C'][xind,yind,channel]=np.random.beta(a,b)
 		new_ll,rendering = self.logl_compute(oid=oid,new_surface=nsurface, cur_surfaces=cur_surfaces)
 		return self.MCMC(self.ll, new_ll, surface, nsurface,rendering)
 
@@ -633,6 +683,7 @@ class Object():
 		nsurface = copy.deepcopy(surface)
 		#mixture proposal
 		prop_ll = 0
+
 		if _type == 'local':
 			sigma=0.05
 			old_val = nsurface.params['X'][xind,yind,2]
@@ -651,6 +702,38 @@ class Object():
 
 	def set_observation(self,fname):
 		obs = scipy.misc.imread(fname)/255.0
+		
+		if DATA_DRIVEN:
+			tmp = fname.split('.png')[0]
+			import os,pickle
+			if os.path.isfile(tmp+'.pkl'):
+				data=pickle.load(open(tmp+'.pkl','rb'))
+				segmented_image=data['segmented_image']
+				labels_image=data['labels_image']
+				number_regions=data['number_regions']
+			else:
+				obs_image  = Image.open(fname)
+				(segmented_image, labels_image, number_regions) = pms.segment(obs_image, spatial_radius=20, range_radius=20, min_density=50)
+				pickle.dump({'segmented_image':segmented_image,'labels_image':labels_image,'number_regions':number_regions}, open(tmp+'.pkl','wb'))
+
+			unique_labels = np.unique(labels_image)
+			self.active_labels = []
+			self.active_range = []
+			self.data_colors = []
+			for ll in unique_labels:
+				indxs = np.where(labels_image==ll)
+				px = segmented_image[indxs]
+				avg_px = np.sum(px)/(np.shape(px)[0]*np.shape(px)[1])
+				if avg_px != 255.0:
+					self.active_labels.append(ll)
+					xs = indxs[0][0]; xe = indxs[0][-1]
+					ys = indxs[1][0]; ye = indxs[1][-1]
+					self.active_range.append([(xs+xe)/2.0, (ys+ye)/2.0])
+					self.data_colors.append(np.mean(segmented_image[indxs],0)/255.0)
+				
+			self.number_regions = len(self.active_labels)
+
+
 		if self.gpyramid:
 			self.obs=dict()
 			self.obs[0]=obs
@@ -679,7 +762,7 @@ class Object():
 				surfaces[ii] = self.propose_translation(ii,surfaces[ii],surfaces,j)
 			for j in range(3):
 				surfaces[ii] = self.propose_rotation(ii,surfaces[ii],surfaces,j)
-			for j in range(2):#skip inference on z=axis
+			for j in range(1):#skip inference on z=axis
 				surfaces[ii] = self.propose_scale(ii,surfaces[ii],surfaces,j)
 
 	def RJMCMC_UPDATE(self, surfaces):
@@ -760,16 +843,18 @@ class Object():
 			max_oid = max(nsurfaces.keys())+1
 		nsurfaces[max_oid] = bezier.BezierPatch()
 
-		cp_id = min(nsurfaces.keys())
-		nsurfaces[max_oid].params['Z'] = copy.deepcopy(self.surfaces[cp_id].params['Z'])
-		nsurfaces[max_oid].params['theta_c'] = copy.deepcopy(self.surfaces[cp_id].params['theta_c'])
-		nsurfaces[max_oid].params['theta_c_crp'] = copy.deepcopy(self.surfaces[cp_id].params['theta_c_crp'])
-		nsurfaces[max_oid].params['C'] = copy.deepcopy(self.surfaces[cp_id].params['C'])
-		nsurfaces[max_oid].params['Z_CRPOBJ'] = copy.deepcopy(self.surfaces[cp_id].params['Z_CRPOBJ'])
-		# nsurfaces[max_oid].params['X'] = copy.deepcopy(self.surfaces[cp_id].params['X'])
-		# nsurfaces[max_oid].params['X'][:,:,2] *= 0
-
-		_, nsurfaces[max_oid] = self.sample_prior_object(nsurfaces[max_oid], 'birth')
+		if SHARING:
+			cp_id = min(nsurfaces.keys())
+			nsurfaces[max_oid].params['Z'] = copy.deepcopy(self.surfaces[cp_id].params['Z'])
+			nsurfaces[max_oid].params['theta_c'] = copy.deepcopy(self.surfaces[cp_id].params['theta_c'])
+			nsurfaces[max_oid].params['theta_c_crp'] = copy.deepcopy(self.surfaces[cp_id].params['theta_c_crp'])
+			nsurfaces[max_oid].params['C'] = copy.deepcopy(self.surfaces[cp_id].params['C'])
+			nsurfaces[max_oid].params['Z_CRPOBJ'] = copy.deepcopy(self.surfaces[cp_id].params['Z_CRPOBJ'])
+			# nsurfaces[max_oid].params['X'] = copy.deepcopy(self.surfaces[cp_id].params['X'])
+			# nsurfaces[max_oid].params['X'][:,:,2] *= 0
+			_, nsurfaces[max_oid] = self.sample_prior_object(nsurfaces[max_oid], 'birth')
+		else:
+			_, nsurfaces[max_oid] = self.sample_prior_object(nsurfaces[max_oid])
 
 		if DELAYED_REJECTION:
 			for dr_repeats in range(BIRTH_DR_TOTAL_INTERMEDIATE_PROPOSAL):
@@ -809,8 +894,6 @@ class Object():
 		self.ll = self.sample_prior()
 
 		for itr in range(ITERS):
-			t1=time.time()
-
 			if RJMCMC:
 				chosen = np.where(np.random.multinomial(1,self.move_probabilities)==1)[0][0]
 			else:
@@ -837,17 +920,14 @@ class Object():
 					pickle.dump({'params':self.surfaces}, open('params.pkl','wb'))
 
 
-
-
-
 if __name__ == "__main__":
 	bezier.setup()
 	S = Sampler()
 	if MOTION_INFERENCE:
 		S.set_observation_sequence("data/seq1")
 	else:
-		S.set_observation("obs_s4.png")
-	S.infer(10000)
+		S.set_observation("obs_cone.png")
+	S.infer(1000000)
 
 
 

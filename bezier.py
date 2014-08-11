@@ -27,6 +27,7 @@ HEIGHT=300
 GENERATE_DATA = False
 
 translate_obj = 0;
+REVERSE_FLAG=False
 
 MULTIPATCH = False
 GCNT=0
@@ -44,7 +45,6 @@ class BezierPatch():
 		xStep = (xMax-xMin)/(self.nPts-1)
 		yStep = (yMax-yMin)/(self.nPts-1)
 		self.divisionsGL = 40
-
 		
 
 		# initialise a list representing a regular 2D grid of control points.
@@ -77,13 +77,13 @@ class BezierPatch():
 		#latents
 		self.params = {
 				#hypers
-				'lambda_x':100.0,
+				'lambda_x':10.0,
 				'lambda_c':10.0,
-				'X_var':0.005,
+				'X_var':0.0005,
 				'mu_l':-2.0,
 				'mu_u':0.0,
-				'X_l':-1.0,
-				'X_u':1.0,
+				'X_l':0,#-1
+				'X_u':1,#1
 				'pflip':0.01,
 				'thetac_a': 2.0,#0.1,
 				'thetac_b': 2.0,#0.9,
@@ -95,9 +95,9 @@ class BezierPatch():
 				# 'mu_p': np.zeros((self.divisions,self.divisions)),
 				'X':np.zeros((self.nPts,self.nPts,3)),
 				'mix':np.zeros(self.K),
-				'tx':0,
-				'ty':0,
-				'tz':0,
+				'tx':None,
+				'ty':None,
+				'tz':None,
 				'rx':0,
 				'ry':0,
 				'rz':0,
@@ -110,29 +110,30 @@ class BezierPatch():
 
 	def synthetic_render(self, translate_obj):
 		glEnable(GL_COLOR_MATERIAL)
-		# glColor3f(0.7,0.1,0.1)
-		# glutSolidCube(0.6)
-		# glutSolidCone(0.4,0.7,20,20)
-		# glutSolidCylinder(0.3,0.6,20,20)
-		# glutSolidSphere(0.4,20,20)
-		# glutSolidTeapot(0.5)
+		if False:
+			glColor3f(0.7,0.1,0.1)
+			# glutSolidCube(0.6)
+			glutSolidCone(0.4,0.7,20,20)
+			# glutSolidCylinder(0.3,0.6,20,20)
+			# glutSolidSphere(0.4,20,20)
+			# glutSolidTeapot(0.5)
+		else:
+			glPushMatrix()
+			glColor3f(0.2,0.3,0.6)
+			glTranslatef(0,translate_obj-0.5,0)
+			glutSolidSphere(0.15,30,30)
+			glPopMatrix()
 
-		# glPushMatrix()
-		# glColor3f(0.3,0.3,0.6)
-		# glTranslatef(0,translate_obj,0)
-		# glutSolidSphere(0.2,30,30)
-		# glPopMatrix()
-
-		glPushMatrix()
-		glTranslatef(0,0.5,0)
-		glRotatef(60,1,0,0)
-		glColor3f(0.7,0.1,0.1)
-		# glutSolidCylinder(0.4,0.4,20,20)
-		quadric=gluNewQuadric()
-		gluQuadricNormals(quadric, GLU_SMOOTH);
-		gluQuadricTexture(quadric, GL_TRUE);
-		gluCylinder(quadric,0.4,0.4,0.5,30,30);	
-		glPopMatrix()
+			glPushMatrix()
+			glTranslatef(0,0.5,0)
+			glRotatef(50,1,0,0)
+			glColor3f(0.7,0.1,0.1)
+			# glutSolidCylinder(0.4,0.4,20,20)
+			quadric=gluNewQuadric()
+			gluQuadricNormals(quadric, GLU_SMOOTH);
+			gluQuadricTexture(quadric, GL_TRUE);
+			gluCylinder(quadric,0.4,0.4,0.5,30,30);	
+			glPopMatrix()
 
 	def render(self):
 		# plot all surface patches
@@ -142,7 +143,8 @@ class BezierPatch():
 		glRotatef(self.params['rx'],1,0,0)
 		glRotatef(self.params['ry'],0,1,0)
 		glRotatef(self.params['rz'],0,0,1)
-		glScalef(self.params['sx'],self.params['sy'],self.params['sz'])
+		#glScalef(self.params['sx'],self.params['sy'],self.params['sz'])
+		glScalef(self.params['sx'],self.params['sx'],self.params['sx'])
 
 		if MULTIPATCH:
 
@@ -207,9 +209,12 @@ def drawGround():
 def display(DATA, capture=False):
 	glEnable( GL_LIGHTING )
 	glEnable( GL_LIGHT0 )
+	# glEnable( GL_LIGHT1 )
+
 	glLightModeli( GL_LIGHT_MODEL_TWO_SIDE, 0 )
 	
 	glLightfv( GL_LIGHT0, GL_POSITION, [1, 0.2, -1.5, 1] )
+	# glLightfv( GL_LIGHT1, GL_POSITION, [1, 0.2, 5.5, 1] )
 
 	# xx=2*math.cos(np.random.uniform(0,360))
 	# yy=2*math.sin(np.random.uniform(0,360))
@@ -219,7 +224,11 @@ def display(DATA, capture=False):
 	lA = 0.4; glLightfv( GL_LIGHT0, GL_AMBIENT, [lA, lA, lA, 1] )
 	lD = 1.0; glLightfv( GL_LIGHT0, GL_DIFFUSE, [lD, lD, lD, 1] )
 	lS = 1.0; glLightfv( GL_LIGHT0, GL_SPECULAR, [lS, lS, lS, 1] )
-	glEnable( GL_AUTO_NORMAL )
+
+	# # lA = 0.4; glLightfv( GL_LIGHT1, GL_AMBIENT, [lA, lA, lA, 1] )
+	# lD = 1.0; glLightfv( GL_LIGHT1, GL_DIFFUSE, [lD, lD, lD, 1] )
+	# # lS = 1.0; glLightfv( GL_LIGHT1, GL_SPECULAR, [lS, lS, lS, 1] )
+	# glEnable( GL_AUTO_NORMAL )
 
 	"""OpenGL display function."""
 	glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
@@ -232,16 +241,14 @@ def display(DATA, capture=False):
 	glLoadIdentity( )
 
 	if GENERATE_DATA:
-		global translate_obj,GCNT
+		global translate_obj,GCNT,REVERSE_FLAG
 		glPushMatrix()
 		glTranslatef( 0, 0, -3 )
 		#glRotatef( -180, 1, 0, 0)
 		# glRotatef( 45, 1, 1, 0)
 
-		if translate_obj > 0.6:
-			translate_obj -= 0.1
-		else:
-			translate_obj += 0.1
+		translate_obj += 0.1
+
 		surface.synthetic_render(translate_obj);
 		glPopMatrix()
 		
@@ -308,6 +315,6 @@ if __name__ == "__main__":
 	GENERATE_DATA = True
 	setup()
 	surface = BezierPatch()
-	for ii in range(10):
+	for ii in range(12):
 		display({'surfaces':surface,'T':0})
 
